@@ -1,6 +1,5 @@
 beautifulsoup4==4.13.3
 fastcore==1.6.3
-fran==0.9.1
 ipdb==0.13.13
 ipython==8.12.3
 ipywidgets==8.1.3
