@@ -1,0 +1,16 @@
+beautifulsoup4==4.13.3
+fastcore==1.6.3
+fran==0.9.1
+ipdb==0.13.13
+ipython==8.12.3
+ipywidgets==8.1.3
+itk==5.4.2.post1
+matplotlib==3.10.1
+numpy==2.2.3
+pandas==2.2.3
+PyYAML==6.0.2
+ray==2.36.1
+SimpleITK==2.4.0
+SimpleITK==2.4.1
+torch==2.5.1+cu121
+tqdm==4.66.5
