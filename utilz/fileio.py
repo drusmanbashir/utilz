@@ -1,5 +1,5 @@
+# %%
 import collections
-
 from bs4 import BeautifulSoup as BS
 import tqdm,yaml
 import pickle, os,json
@@ -12,7 +12,7 @@ import SimpleITK as sitk
 from fastcore.basics import patch_to
 import pandas as pd
 
-from string import get_extension, str_to_path
+from utilz.string import get_extension, str_to_path
 
 tr = ipdb.set_trace
 
@@ -181,7 +181,6 @@ save_pickle = dump(pickle,"wb")
 save_json = dump(json,"w")
 # load_pickle = load(pickle)
 
-# %%
 @str_to_path(0)
 def load_dict(filename):
     def _inner(filename,ext):

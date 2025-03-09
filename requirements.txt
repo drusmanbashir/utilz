@@ -10,7 +10,6 @@ numpy==2.2.3
 pandas==2.2.3
 PyYAML==6.0.2
 ray==2.36.1
-SimpleITK==2.4.0
 SimpleITK==2.4.1
 torch==2.5.1+cu121
 tqdm==4.66.5

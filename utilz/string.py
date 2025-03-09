@@ -1,3 +1,5 @@
+
+# %%
 from datetime import datetime
 import re
 from pathlib import Path
@@ -82,7 +84,6 @@ def replace_extension(fname: str, new_ext: str):
     return fname_out
 
 
-# %%
 def strip_slicer_strings(fname: str):
     pt = re.compile(r"(_\\d)?$", re.IGNORECASE)
     pt2 = re.compile(r"(_\\d)?-segment.*$", re.IGNORECASE)
