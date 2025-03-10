@@ -5,10 +5,10 @@ ipython==8.12.3
 ipywidgets==8.1.3
 itk==5.4.2.post1
 matplotlib==3.10.1
-numpy==2.2.3
+numpy
 pandas==2.2.3
 PyYAML==6.0.2
 ray==2.36.1
 SimpleITK==2.4.1
-torch==2.5.1+cu121
+torch
 tqdm==4.66.5
