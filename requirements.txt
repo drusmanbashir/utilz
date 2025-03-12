@@ -11,4 +11,6 @@ PyYAML>=6.0.2
 ray>=2.36.1
 SimpleITK>=2.4.1
 torch
+torchvision
+torchaudio
 tqdm>=4.66.5
