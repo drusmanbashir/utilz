@@ -1,3 +1,5 @@
+
+pytest>=8.3.3
 beautifulsoup4>=4.13.3
 fastcore>=1.6.3
 ipdb>=0.13.13
