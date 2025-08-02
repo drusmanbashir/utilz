@@ -375,30 +375,32 @@ def get_train_valid_test_lists_from_json(project_title, fold, json_fname, image_
 
 
 
-@str_to_path(0)
-def find_matching_fn(src_fn:Path,mask_fnames:Union[list,Path],tags='case_id'):
-        allowed_tags = [ "case_id", "all"] # all means identical filename
-        assert tags in allowed_tags, "Allowed tags are {0}".format(allowed_tags)
-        if isinstance(mask_fnames,Path) and mask_fnames.is_dir():
-            mask_fnames = list(mask_fnames.glob("*"))
-            mask_fnames = [fn for fn in mask_fnames if is_img_file(fn)]
-        assert (len(mask_fnames) > 0), "List of candidate filenames is empty"
-        src_fn = cleanup_fname(src_fn.name)
-        matching_mask_fns=[]
-        for mask_fn in mask_fnames:
-            if tags == 'all':
-                mask_fn_clean = cleanup_fname(mask_fn.name)
-                if mask_fn_clean==src_fn:
-                    matching_mask_fns.append(mask_fn)
-            else:
-                cid = info_from_filename(src_fn,full_caseid=True)['case_id']
-                cid_mask = info_from_filename(mask_fn.name,full_caseid=True)['case_id']
-                if cid_mask == cid:
-                    matching_mask_fns.append(mask_fn)
-        if len(matching_mask_fns)==1: return matching_mask_fns[0]
-        # elif len(matching_mask_fns)==0: return None
-        else: raise Exception("Multiple or None files matching {0} found:\n{1}".format(src_fn, matching_mask_fns))
 
+@str_to_path(0)
+def find_matching_fn(src_fn:Path,target_fns:Union[list,Path],tags=['case_id'], allow_multiple_matches=False):
+        allowed_tags = [ "case_id", "all", "desc","date"] # all means identical filename
+        assert set(tags).issubset(allowed_tags),"Allowed tags are {0}".format(allowed_tags)
+        if isinstance(target_fns,Path) and target_fns.is_dir():
+            target_fns = list(target_fns.glob("*"))
+            target_fns = [fn for fn in target_fns if is_img_file(fn)]
+        assert (len(target_fns) > 0), "List of candidate filenames is empty"
+        src_fn = cleanup_fname(src_fn.name)
+        matching_target_fns=[]
+        for target_fn in target_fns:
+            target_fn_clean = cleanup_fname(target_fn.name)
+            if tags == ['all']:
+                if target_fn_clean==src_fn:
+                    matching_target_fns.append(target_fn_clean)
+            else:
+                tags_src = {tag:info_from_filename(src_fn,full_caseid=True)[tag] for tag in tags}
+                tags_target = {tag:info_from_filename(target_fn_clean,full_caseid=True)[tag] for tag in tags}
+                if all(tags_src[k] == tags_target[k] for k in tags_src.keys() & tags_target.keys()):
+                    matching_target_fns.append(target_fn)
+        if len(matching_target_fns)==1: return matching_target_fns[0]
+        elif len(matching_target_fns)==0: raise Exception("No files matching {0} found".format(src_fn))
+        # elif len(matching_mask_fns)==0: return None
+        elif len(matching_target_fns)>1 and allow_multiple_matches==False: raise Exception("Multiple files matching {0} found:\n{1}".format(src_fn, matching_target_fns))
+        else: return matching_target_fns
 
 def get_fileslist_from_path(path:Path, ext:str = ".pt"):
     return list(path.glob("*"+ext))

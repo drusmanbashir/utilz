@@ -1,6 +1,7 @@
 pytest>=8.3.3
 beautifulsoup4>=4.13.3
-fastcore>=1.6.3
+fasttransform==0.0.2
+fastcore==1.7.29
 ipdb>=0.13.13
 ipython>=8.12.3
 ipywidgets>=8.1.3
