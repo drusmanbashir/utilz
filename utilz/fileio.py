@@ -20,6 +20,7 @@ tr = ipdb.set_trace
 
 @str_to_path()
 def is_sitk_file(fn: Path):
+    """Check if file is a SimpleITK supported format (.nii, .nrrd)."""
     if fn.is_dir(): return False
     fn_name = fn.name
     sitk_exts = ".nii", ".nrrd"
@@ -31,6 +32,7 @@ def is_sitk_file(fn: Path):
 
 @str_to_path()
 def is_img_file(fn:Path):
+    """Check if file is an image file (.nii, .nrrd, .pt)."""
     if fn.is_dir(): return False
     fn_name = fn.name
     exts = ".nii", ".nrrd", ".pt"
@@ -41,17 +43,20 @@ def is_img_file(fn:Path):
 
 @patch_to(Path)
 def str_replace(self,str1,str2):
+    """Replace string occurrences in path and return new Path object."""
     interm = str(self)
     interm= interm.replace(str1,str2)
     return self.__class__(interm)
 
 def convert_uint16_to_uint8(fname):
+    """Convert uint16 numpy array to uint8 and save back to file."""
     x = np.load(fname)
     if x.dtype!=np.uint8:
         np.save(fname,x.astype(np.uint8))
     return fname,x.dtype
 
 def save_file_wrapper(fnc):
+    """Decorator to handle file saving with overwrite and directory creation options."""
     def _inner(object,filename, verbose=False,overwrite=True,makedir=True):
         if not isinstance(filename, Path): filename = Path(filename)
         if overwrite==True or not filename.exists():
@@ -67,6 +72,7 @@ def save_file_wrapper(fnc):
 
 @save_file_wrapper
 def save_np(object,filename):
+    """Save numpy array to file using numpy's save function."""
     np.save(filename,object)
 
 #
@@ -79,6 +85,7 @@ def save_np(object,filename):
 #
 #
 def load_file(*ar,**kwargs):
+    """Decorator to handle file loading with different file modes."""
     def inner(func ):
         def wrapper (filename ):
             with open(filename,*ar,**kwargs) as f:
@@ -88,17 +95,23 @@ def load_file(*ar,**kwargs):
     return inner
         
 @load_file("r")
-def load_json(filename): return json.load(filename)
+def load_json(filename): 
+    """Load JSON file."""
+    return json.load(filename)
 
 @load_file("rb")
-def load_pickle(filename): return pickle.load(filename)
+def load_pickle(filename): 
+    """Load pickle file."""
+    return pickle.load(filename)
 
 @load_file('r')
 def load_yaml(filename):
-            output_dic_ = yaml.safe_load(filename)
-            return output_dic_
+    """Load YAML file."""
+    output_dic_ = yaml.safe_load(filename)
+    return output_dic_
 
 def load_text(filename):
+    """Load text file as list of stripped lines."""
     with open(filename) as f:
         contents = f.readlines()
         contents = [a.strip() for a in contents]
@@ -107,21 +120,24 @@ def load_text(filename):
 
 @load_file('r')
 def load_xml(filename):
-        return BS(filename,'xml')
+    """Load XML file using BeautifulSoup."""
+    return BS(filename,'xml')
 
 
 def save_xml(itm, filename):
+    """Save XML content to file."""
     with open(filename,'w') as f:
         f.write(itm)
 
 
 
 def save_json(dictionary, filename):
+    """Save dictionary as JSON file."""
     with open(filename,'w') as f:
         json.dump(dictionary,f)
+
 def save_sitk(img: Union[torch.Tensor, np.ndarray, sitk.Image], output_filename, verbose=True):
-
-
+    """Save image using SimpleITK format."""
     if isinstance(img,torch.Tensor): img = img.cpu().detach().numpy()
     if not isinstance(img,sitk.Image): img = sitk.GetImageFromArray(img)
 
@@ -135,14 +151,16 @@ def save_sitk(img: Union[torch.Tensor, np.ndarray, sitk.Image], output_filename,
 
 
 def np_to_ni(input_filename,output_filename, overwrite=False):
-        if not output_filename.exists() or overwrite==True:
-            img = np.load(input_filename)
-            print("Saving file {}".format(output_filename))
-            save_sitk(img,output_filename)
-        else: print("File {} exists. Skipping".format(output_filename))
+    """Convert numpy file to NIfTI format."""
+    if not output_filename.exists() or overwrite==True:
+        img = np.load(input_filename)
+        print("Saving file {}".format(output_filename))
+        save_sitk(img,output_filename)
+    else: print("File {} exists. Skipping".format(output_filename))
 
 
 def is_filename(x:str):
+    """Check if string represents a filename (not a path)."""
     if not "/" in x:
         if "." in x:
             ext = x.split(".")[1]
@@ -155,6 +173,7 @@ def is_filename(x:str):
 
 
 def maybe_makedirs(x:Union[list,tuple, str,Path]):
+    """Create directories if they don't exist."""
     def _inner(x):
         try:
             if not isinstance(x,Path):
@@ -172,6 +191,7 @@ def maybe_makedirs(x:Union[list,tuple, str,Path]):
 
  
 def dump(fnc, *args1):
+    """Generic dump decorator for file saving."""
     def _inner(object,filename,*args2,**kwargs):
         with open(filename,*args1,*args2,**kwargs) as fout:
             fnc.dump(object, fout)
@@ -183,6 +203,7 @@ save_json = dump(json,"w")
 
 @str_to_path(0)
 def load_dict(filename):
+    """Load dictionary from JSON or pickle file automatically based on extension."""
     def _inner(filename,ext):
                 if ext == 'json': 
                     return load_json(filename)
@@ -199,6 +220,7 @@ def load_dict(filename):
                 raise FileNotFoundError
 
 def save_dict(object,filename,sort=False):
+    """Save dictionary as JSON or pickle file, trying JSON first."""
     filename = str(filename).split(".")[0]
     try: 
         if sort==True: 
@@ -210,27 +232,30 @@ def save_dict(object,filename,sort=False):
 
 
 def sitk_filename_to_numpy(fname):
-            arr = sitk.ReadImage(str(fname))
-            arr= sitk.GetArrayFromImage(arr)
-            return arr
+    """Convert SimpleITK image file to numpy array."""
+    arr = sitk.ReadImage(str(fname))
+    arr= sitk.GetArrayFromImage(arr)
+    return arr
 
 
 
 @str_to_path(0)
 def load_image(fn):
-        val_extensions={
-            'np': np.load,
-            'pt': torch.load,
-            'nii.gz':sitk.ReadImage,
-            'nii':sitk.ReadImage
-        }
-        for key,fnc in val_extensions.items():
-            if (ext:=get_extension(fn))==key:
-                return fnc(fn)
-        print("Extension invalid: ".format(ext))
+    """Load image from various formats (numpy, torch, nii)."""
+    val_extensions={
+        'np': np.load,
+        'pt': torch.load,
+        'nii.gz':sitk.ReadImage,
+        'nii':sitk.ReadImage
+    }
+    for key,fnc in val_extensions.items():
+        if (ext:=get_extension(fn))==key:
+            return fnc(fn)
+    print("Extension invalid: ".format(ext))
 
 
 def rename_and_move_images_and_masks(project_title,img_files,mask_files=None,counter_start=0,dataset_subid:str="",ext=None,overwrite=False,log=True):
+    """Rename and organize image and mask files into structured folders."""
     def _to_sitk(im,subfolder,output_filename):
             output_filename_full = subfolder/output_filename   
             if not output_filename_full.exists() or overwrite==True:
@@ -276,19 +301,20 @@ def rename_and_move_images_and_masks(project_title,img_files,mask_files=None,cou
         df.to_csv(csv_filename,index = False)
 
 def save_list(listi,filename:Path): 
-        def write(item):
-                        f.write(str(item)+"\n")
+    """Save nested list structure to file with recursive formatting."""
+    def write(item):
+        f.write(str(item)+"\n")
 
-        def _inner_recursion(sub_list):
-                    f.write("\n")
-                    for item in sub_list:
-                        if isinstance(item,Union[list,tuple]):
-                            _inner_recursion(item)
-                        else:
-                            write(item)
+    def _inner_recursion(sub_list):
+        f.write("\n")
+        for item in sub_list:
+            if isinstance(item,Union[list,tuple]):
+                _inner_recursion(item)
+            else:
+                write(item)
 
-        with open(filename,'w') as f:
-                    _inner_recursion(listi)
+    with open(filename,'w') as f:
+        _inner_recursion(listi)
 
 
 # %%

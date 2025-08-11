@@ -1,5 +1,11 @@
 import ast
        
+
+class PrintableDict(dict): # for a dict
+    def __str__(self):
+        return '. '.join(' '.join(str(x) for x in
+            chain.from_iterable(zip((item[0], 'is', 'and'), item[1])))
+                for item in self.iteritems()) + '.'
 class DictToAttr(dict):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

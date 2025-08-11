@@ -35,21 +35,6 @@ def set_autoreload():
             ipython.run_line_magic("load_ext", "autoreload")
             ipython.run_line_magic("autoreload", "2")
 
-@str_to_path(0)
-def create_df_from_folder(folder):
-    images_fldr = folder/("images")
-    lms_fldr = folder/("lms")
-    image_fns = list(images_fldr.glob("*"))
-    lm_fns =  list(lms_fldr.glob("*"))
-    dicis = []
-    for img_fn in image_fns:
-        lm_fn = find_matching_fn(img_fn,lm_fns,tags='case_id')
-        case_id = info_from_filename(lm_fn.name,full_caseid=True)['case_id']
-        dici= {"image":img_fn, "lm":lm_fn, "case_id":case_id}
-        dicis.append(dici)
-    df = pd.DataFrame(dicis)
-    return df
-
 
 
 def test_modified(filename,ndays:int= 1):
@@ -390,7 +375,7 @@ def find_matching_fn(src_fn:Path,target_fns:Union[list,Path],tags=['case_id'], a
             target_fn_clean = cleanup_fname(target_fn.name)
             if tags == ['all']:
                 if target_fn_clean==src_fn:
-                    matching_target_fns.append(target_fn_clean)
+                    matching_target_fns.append(target_fn)
             else:
                 tags_src = {tag:info_from_filename(src_fn,full_caseid=True)[tag] for tag in tags}
                 tags_target = {tag:info_from_filename(target_fn_clean,full_caseid=True)[tag] for tag in tags}
@@ -402,6 +387,21 @@ def find_matching_fn(src_fn:Path,target_fns:Union[list,Path],tags=['case_id'], a
         elif len(matching_target_fns)>1 and allow_multiple_matches==False: raise Exception("Multiple files matching {0} found:\n{1}".format(src_fn, matching_target_fns))
         else: return matching_target_fns
 
+
+@str_to_path(0)
+def create_df_from_folder(folder):
+    images_fldr = folder/("images")
+    lms_fldr = folder/("lms")
+    image_fns = list(images_fldr.glob("*"))
+    lm_fns =  list(lms_fldr.glob("*"))
+    dicis = []
+    for img_fn in image_fns:
+        lm_fn = find_matching_fn(img_fn,lm_fns,tags=['case_id'])
+        case_id = info_from_filename(lm_fn.name,full_caseid=True)['case_id']
+        dici= {"image":img_fn, "lm":lm_fn, "case_id":case_id}
+        dicis.append(dici)
+    df = pd.DataFrame(dicis)
+    return df
 def get_fileslist_from_path(path:Path, ext:str = ".pt"):
     return list(path.glob("*"+ext))
 
