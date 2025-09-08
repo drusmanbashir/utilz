@@ -51,9 +51,9 @@ def int_to_str(val: int, total_length=5):
 
 def headline(inp: str):
     """Print text with decorative lines around it."""
-    print("=") * 20
+    print("=" * 100)
     print(inp)
-    print("=") * 20
+    print("=" * 100)
 
 
 def append_time(input_str, now=True):

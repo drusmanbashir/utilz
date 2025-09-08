@@ -217,7 +217,7 @@ def load_dict(filename):
                 for ext in ["json", "pkl"]:
                     filename_ = filename.parent/(".".join([filename.name,ext]))
                     if filename_.exists(): return _inner(filename_,ext)
-                raise FileNotFoundError
+                raise FileNotFoundError("File not found: {}".format(filename))
 
 def save_dict(object,filename,sort=False):
     """Save dictionary as JSON or pickle file, trying JSON first."""
