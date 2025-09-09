@@ -11,7 +11,7 @@ numpy
 pandas>=2.2.3
 PyYAML>=6.0.2
 ray[tune]
-SimpleITK>=2.4.1
+SimpleITK>=2.2.0
 torch
 torchvision
 torchaudio
