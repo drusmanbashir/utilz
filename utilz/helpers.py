@@ -1,6 +1,8 @@
 # %%
 import collections
+import multiprocessing as mp
 import logging
+
 import os
 import pprint
 import re
@@ -248,7 +250,7 @@ def _available_cpus():
     return max(1, (os.cpu_count() or 1))
 
 
-def limit_threads_for_io():
+def _limit_threads_for_io():
     """
     Strict 1-thread-per-process config.
     Best for I/O-bound tasks (file moves, h5 read, light CPU).
@@ -275,7 +277,7 @@ def limit_threads_for_io():
         pass
 
 
-def limit_threads_for_numeric(
+def _limit_threads_for_numeric(
     workers: int | None = None, per_proc_threads: int | None = None
 ):
     """
@@ -370,11 +372,11 @@ def multiprocess_multiarg(
     # single-process or debug path
     if (not multiprocess) or debug or num_processes == 1:
         if io:
-            _limit_threads_io()
+            _limit_threads_for_io()
         elif algebra:
             # compute per-proc threads for single process
             per_threads = max(1, _available_cpus() - 1)
-            _limit_threads_numeric(per_threads)
+            _limit_threads_for_numeric(per_threads)
         results = []
         for res in pbar_fn(arguments):
             if debug:
@@ -390,13 +392,13 @@ def multiprocess_multiarg(
     initializer = None
     initargs = None
     if io:
-        initializer = _limit_threads_io
+        initializer = _limit_threads_for_io
         initargs = tuple()
     elif algebra:
         # give each worker a few threads but keep within allocation
         cpus = _available_cpus()
         per_proc_threads = max(1, cpus // num_processes)
-        initializer = partial(_limit_threads_numeric, per_proc_threads)
+        initializer = partial(_limit_threads_for_numeric, per_proc_threads)
         initargs = tuple()
 
     try:
