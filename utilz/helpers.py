@@ -234,6 +234,94 @@ def get_list_input(text: str = "", fnc=str_to_list_float):
     str_list = input(text)
 
 
+def _available_cpus():
+    # 1) SLURM hint
+    slurm = os.getenv("SLURM_CPUS_PER_TASK")
+    if slurm and slurm.isdigit():
+        return max(1, int(slurm))
+    # 2) cgroup/affinity-aware
+    try:
+        return max(1, len(os.sched_getaffinity(0)))
+    except Exception:
+        pass
+    # 3) fallback
+    return max(1, (os.cpu_count() or 1))
+
+
+def limit_threads_for_io():
+    """
+    Strict 1-thread-per-process config.
+    Best for I/O-bound tasks (file moves, h5 read, light CPU).
+    """
+    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ["OPENBLAS_NUM_THREADS"] = "1"
+    os.environ["MKL_NUM_THREADS"] = "1"
+    os.environ["NUMEXPR_NUM_THREADS"] = "1"
+    os.environ["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = "1"
+    os.environ.setdefault("OMP_WAIT_POLICY", "PASSIVE")
+    os.environ.setdefault("MALLOC_ARENA_MAX", "2")
+    try:
+        import torch
+
+        torch.set_num_threads(1)
+        torch.set_num_interop_threads(1)
+    except Exception:
+        pass
+    try:
+        import itk
+
+        itk.MultiThreaderBase.SetGlobalDefaultNumberOfThreads(1)
+    except Exception:
+        pass
+
+
+def limit_threads_for_numeric(
+    workers: int | None = None, per_proc_threads: int | None = None
+):
+    """
+    Balanced config for NumPy/ITK/PyRadiomics-heavy work.
+    Ensures workers * per_proc_threads <= available CPUs.
+    """
+    cpus = _available_cpus()
+    if workers is None:
+        workers = max(1, cpus - 1)  # leave one core for parent
+    if per_proc_threads is None:
+        # give each worker a few BLAS/OpenMP threads, but keep within cpus
+        per_proc_threads = max(1, cpus // workers)
+
+    # final guard: don’t exceed allocation
+    total = workers * per_proc_threads
+    if total > cpus:
+        per_proc_threads = max(1, cpus // workers)
+
+    # apply
+    t = str(per_proc_threads)
+    os.environ["OMP_NUM_THREADS"] = t
+    os.environ["OPENBLAS_NUM_THREADS"] = t
+    os.environ["MKL_NUM_THREADS"] = t
+    os.environ["NUMEXPR_NUM_THREADS"] = t
+    os.environ["ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS"] = t
+    os.environ.setdefault("OMP_PROC_BIND", "true")
+    os.environ.setdefault("OMP_PLACES", "cores")
+    os.environ.setdefault("MALLOC_ARENA_MAX", "2")
+
+    try:
+        import torch
+
+        torch.set_num_threads(per_proc_threads)
+        torch.set_num_interop_threads(1)  # keep inter-op low
+    except Exception:
+        pass
+    try:
+        import itk
+
+        itk.MultiThreaderBase.SetGlobalDefaultNumberOfThreads(per_proc_threads)
+    except Exception:
+        pass
+
+    return workers, per_proc_threads  # handy if you want to size your Pool accordingly
+
+
 def multiprocess_multiarg(
     func,
     arguments,
@@ -241,39 +329,92 @@ def multiprocess_multiarg(
     multiprocess=True,
     debug=False,
     progress_bar=True,
+    io=None,  # True -> use I/O config (1 thread/proc)
+    algebra=None,  # True -> use numeric config (few threads/proc)
     logname="/tmp/log.log",
 ):
-    results = []
-    if multiprocess == False or debug == True:
-        for res in pbar(arguments, total=len(arguments)):
-            if debug == True:
-                arg0 = res[0]
-                headline("Logging into file {}".format(logname))
-                logging.getLogger("asyncio").setLevel(logging.WARNING)
-                logging.basicConfig(
-                    filename=logname,
-                    filemode="w",
-                    format="%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
-                    datefmt="%H:%M:%S",
-                    level=logging.DEBUGe
-                )
-                logging.info(" Processing {} .".format(arg0))
-            # tr()
-            results.append(
-                func(
-                    *res,
-                )
-            )
-    else:
-        p = Pool(num_processes)
-        jobs = [p.apply_async(func=func, args=(*argument,)) for argument in arguments]
-        p.close()
-        pbar_fnc = get_pbar() if progress_bar == True else lambda x: x
-        for job in pbar_fnc(jobs):
-            results.append(job.get())
-    return results
+    """
+    Calls func(*args) for each args in 'arguments' (iterable of tuples).
 
-    return fnc(str_list)
+    Threading modes:
+      - io=True       : many processes, 1 thread each (I/O bound, safest on HPC)
+      - algebra=True  : balanced: N processes, M threads each (numeric heavy)
+      - default       : no special thread limiting
+
+    Notes:
+      - If both io and algebra are None/False, no thread caps are applied.
+      - If num_processes<=0/None, we auto-size from available CPUs (leave 1 for parent).
+    """
+    # choose a progress bar adapter
+    try:
+        pbar_fn = get_pbar() if progress_bar else (lambda x: x)
+    except NameError:
+        pbar_fn = _pbar_default if progress_bar else (lambda x: x)
+
+    # size the pool
+    if not num_processes or num_processes < 1:
+        n_cpus = _available_cpus()
+        num_processes = max(1, min(len(arguments) or 1, n_cpus - 1))
+
+    # set up logging for debug path
+    if debug:
+        logging.getLogger("asyncio").setLevel(logging.WARNING)
+        logging.basicConfig(
+            filename=logname,
+            filemode="w",
+            format="%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
+            datefmt="%H:%M:%S",
+            level=logging.DEBUG,  # (fixed)
+        )
+
+    # single-process or debug path
+    if (not multiprocess) or debug or num_processes == 1:
+        if io:
+            _limit_threads_io()
+        elif algebra:
+            # compute per-proc threads for single process
+            per_threads = max(1, _available_cpus() - 1)
+            _limit_threads_numeric(per_threads)
+        results = []
+        for res in pbar_fn(arguments):
+            if debug:
+                logging.info("Processing %s", res[0] if res else None)
+            results.append(func(*res))
+        return results
+
+    # multiprocessing path
+    ctx = mp.get_context("spawn")  # safer on HPC than fork
+    results = []
+
+    # choose initializer for workers
+    initializer = None
+    initargs = None
+    if io:
+        initializer = _limit_threads_io
+        initargs = tuple()
+    elif algebra:
+        # give each worker a few threads but keep within allocation
+        cpus = _available_cpus()
+        per_proc_threads = max(1, cpus // num_processes)
+        initializer = partial(_limit_threads_numeric, per_proc_threads)
+        initargs = tuple()
+
+    try:
+        with ctx.Pool(
+            processes=num_processes, initializer=initializer, initargs=initargs or ()
+        ) as p:
+            jobs = [
+                p.apply_async(func=func, args=tuple(argument)) for argument in arguments
+            ]
+            for j in pbar_fn(jobs):
+                results.append(j.get())  # re-raises child exceptions here
+    except KeyboardInterrupt:
+        try:
+            p.terminate()
+        except Exception:
+            pass
+        raise
+    return results
 
 
 def get_available_device(max_memory=0.8) -> int:
