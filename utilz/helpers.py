@@ -6,8 +6,7 @@ import logging
 import os
 import pprint
 import re
-from functools import wraps
-from multiprocessing import Pool
+from functools import partial, wraps
 from pathlib import Path
 from time import time
 from typing import Union
@@ -21,8 +20,8 @@ from tqdm import tqdm as tqdm_ip
 
 from utilz.dictopts import *
 from utilz.fileio import is_img_file, load_dict, str_to_path
-from utilz.string import (cleanup_fname, dec_to_str, headline,
-                          info_from_filename, path_to_str, regex_matcher)
+from utilz.string import (cleanup_fname, dec_to_str, info_from_filename,
+                          path_to_str, regex_matcher)
 
 tr = ipdb.set_trace
 import gc
@@ -233,7 +232,7 @@ def purge_cuda(learn):
 
 
 def get_list_input(text: str = "", fnc=str_to_list_float):
-    str_list = input(text)
+    input(text)
 
 
 def _available_cpus():
