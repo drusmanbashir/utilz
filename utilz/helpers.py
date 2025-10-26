@@ -1,4 +1,5 @@
 # %%
+from typing import Optional, Tuple
 import collections
 import multiprocessing as mp
 import logging
@@ -26,7 +27,6 @@ from utilz.string import (cleanup_fname, dec_to_str, info_from_filename,
 tr = ipdb.set_trace
 import gc
 
-import ray
 
 # from utilz.fileio import *
 # %%
@@ -35,6 +35,7 @@ import ray
 def set_autoreload():
     # gals = globals()
     # print(gals.keys)
+    import ray
     if "get_ipython" in globals() and not any(
         ["APPLAUNCHER_0_PATH" in os.environ, ray.is_initialized()]
     ):
@@ -275,24 +276,31 @@ def _limit_threads_for_io():
     except Exception:
         pass
 
-
 def _limit_threads_for_numeric(
-    workers: int | None = None, per_proc_threads: int | None = None
-):
+    workers: Optional[int] = None, 
+    per_proc_threads: Optional[int] = None
+) -> Tuple[int, int]:
     """
     Balanced config for NumPy/ITK/PyRadiomics-heavy work.
     Ensures workers * per_proc_threads <= available CPUs.
     """
     cpus = _available_cpus()
+
+    # choose workers
     if workers is None:
         workers = max(1, cpus - 1)  # leave one core for parent
+    else:
+        workers = max(1, int(workers))
+
+    # choose per-proc threads
     if per_proc_threads is None:
-        # give each worker a few BLAS/OpenMP threads, but keep within cpus
-        per_proc_threads = max(1, cpus // workers)
+        per_proc_threads = max(1, cpus // workers if workers else cpus)
+    else:
+        per_proc_threads = max(1, int(per_proc_threads))
 
     # final guard: don’t exceed allocation
     total = workers * per_proc_threads
-    if total > cpus:
+    if total > cpus and workers > 0:
         per_proc_threads = max(1, cpus // workers)
 
     # apply
@@ -308,20 +316,18 @@ def _limit_threads_for_numeric(
 
     try:
         import torch
-
         torch.set_num_threads(per_proc_threads)
         torch.set_num_interop_threads(1)  # keep inter-op low
     except Exception:
         pass
+
     try:
         import itk
-
         itk.MultiThreaderBase.SetGlobalDefaultNumberOfThreads(per_proc_threads)
     except Exception:
         pass
 
-    return workers, per_proc_threads  # handy if you want to size your Pool accordingly
-
+    return workers, per_proc_threads
 
 def multiprocess_multiarg(
     func,
