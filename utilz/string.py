@@ -1,7 +1,6 @@
-# %%
-from datetime import datetime
 import re
 from pathlib import Path
+from typing import Any
 from fastcore.basics import Union, listify
 import ipdb
 import numpy as np
@@ -9,10 +8,13 @@ import numpy as np
 tr = ipdb.set_trace
 import ast
 
-def ast_literal_eval(str_list):
+def ast_literal_eval(str_list) ->list[Any]:
     """Safely evaluate string list using ast.literal_eval."""
     if isinstance(str_list, str):
-        str_list = ast.literal_eval(str_list)
+        try:
+            str_list = ast.literal_eval(str_list)
+        except ValueError:
+            str_list = [t.strip(" '\"") for t in str_list.strip()[1:-1].split(',') if t.strip()]
     return str_list
 
 
@@ -166,16 +168,19 @@ def drop_digit_suffix(fname: str):
 
 def info_from_filename(fname: str, full_caseid=False):
     """Extract project info from filename (proj_title, case_id, date, desc)."""
-    tags = ["proj_title", "case_id", "date", "desc"]
-    name = cleanup_fname(fname)
+    try:
+        tags = ["proj_title", "case_id", "date", "desc"]
+        name = cleanup_fname(fname)
 
-    parts = name.split("_")
-    output_dic = {}
-    for key, val in zip(tags, parts):
-        output_dic[key] = val
-    if full_caseid == True:
-        output_dic["case_id"] = output_dic["proj_title"] + "_" + output_dic["case_id"]
-    return output_dic
+        parts = name.split("_")
+        output_dic = {}
+        for key, val in zip(tags, parts):
+            output_dic[key] = val
+        if full_caseid == True:
+            output_dic["case_id"] = output_dic["proj_title"] + "_" + output_dic["case_id"]
+        return output_dic
+    except Exception as e:
+        return {"Didn't work. filename": fname, "error message": str(e)}
 
 
 def match_filenames(fname1: str, fname2: str):

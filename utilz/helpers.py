@@ -32,13 +32,27 @@ import gc
 # %%
 
 
-def set_autoreload():
+def set_autoreload_ray():
     # gals = globals()
     # print(gals.keys)
     import ray
     if "get_ipython" in globals() and not any(
         ["APPLAUNCHER_0_PATH" in os.environ, ray.is_initialized()]
     ):
+        print("setting autoreload")
+        from IPython import get_ipython
+
+        ipython = get_ipython()
+        if ipython:
+            ipython.run_line_magic("load_ext", "autoreload")
+            ipython.run_line_magic("autoreload", "2")
+
+def set_autoreload():
+    # gals = globals()
+    # print(gals.keys)
+    import ray
+    if "get_ipython" in globals() and not "APPLAUNCHER_0_PATH" in os.environ:
+    
         print("setting autoreload")
         from IPython import get_ipython
 
@@ -595,10 +609,11 @@ def find_matching_fn(
     target_fns: Union[list, Path],
     tags=["case_id"],
     allow_multiple_matches=False,
-):
+) -> Union[Path, list]:
     allowed_tags = ["case_id", "all", "desc", "date"]  # all means identical filename
     assert set(tags).issubset(allowed_tags), "Allowed tags are {0}".format(allowed_tags)
     if isinstance(target_fns, Path) and target_fns.is_dir():
+        assert (target_fns.exists()), "Target directory does not exist"
         target_fns = list(target_fns.glob("*"))
         target_fns = [fn for fn in target_fns if is_img_file(fn)]
     assert len(target_fns) > 0, "List of candidate filenames is empty"
