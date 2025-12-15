@@ -71,7 +71,7 @@ def infer_dataset_name(filename):
     return pat, filename.name
 
 
-def strip_extension(fname: str):
+def strip_extension(fname: str)->str:
     """Remove file extension from filename."""
     exts = ".mrk.json .npy .seg.nrrd .nii.gz.nrrd .nii.gz .nii .nrrd .pt ".split(" ")
     for e in exts:
@@ -101,7 +101,6 @@ def strip_slicer_strings(fname: str):
     fname_cl3 = re.sub(pt2, "", fname_cl2)
     return fname_cl3
 
-# %%
 
 def str_to_path(arg_inds=None):
     """Decorator to convert string arguments to Path objects."""
@@ -115,10 +114,13 @@ def str_to_path(arg_inds=None):
             else:
                 args = list(args)
                 all_inds = range(len(args))
-                args = [
-                    Path(arg) if ind in arg_inds else arg
-                    for ind, arg in zip(all_inds, args)
-                ]
+                new_args = []
+                for ind, arg in zip(all_inds, args):
+                    if ind in arg_inds:
+                        new_args.append(Path(arg))
+                    else:
+                        new_args.append(arg)
+                args = new_args
             return func(*args, **kwargs)
 
         return inner
@@ -209,7 +211,15 @@ def find_file(substring: str, filenames: Union[list, Path]):
 # %%
 # %%
 if __name__ == "__main__":
+    aa = range(0,3)
+# %%
+    for bb in aa:
+        print(bb)
+# %%
+
     name = "lits_11_20111509.nii"
+
+# %%
     name2 = "lits_11.nii"
     name3 = "lits_11_20111509_jacsde3d_thick.nii"
     pt = r"(-?label(_\\\\d)?)|(_\\\\d$)"

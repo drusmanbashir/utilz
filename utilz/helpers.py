@@ -25,11 +25,10 @@ from utilz.string import (cleanup_fname, dec_to_str, info_from_filename,
                           path_to_str, regex_matcher)
 
 tr = ipdb.set_trace
-import gc
+import gc, sys
 
 
 # from utilz.fileio import *
-# %%
 
 
 def set_autoreload_ray():
@@ -50,7 +49,6 @@ def set_autoreload_ray():
 def set_autoreload():
     # gals = globals()
     # print(gals.keys)
-    import ray
     if "get_ipython" in globals() and not "APPLAUNCHER_0_PATH" in os.environ:
     
         print("setting autoreload")
@@ -84,18 +82,6 @@ def timing(f):
         return result
 
     return wrap
-
-
-def get_pbar():
-    if "get_ipython" in globals():
-        if get_ipython().__class__.__name__ == "TerminalInteractiveShell":
-            return tqdm_ip
-        else:
-            return tqdm_ip
-
-
-pbar = get_pbar()
-
 
 def range_inclusive(start, end):
     return range(start, end + 1)
@@ -715,24 +701,7 @@ def write_files_or_not(output_filenames, overwrite=True):
 
 # %%
 if __name__ == "__main__":
+    name = "lits_11_20111509.nii"
+    find_matching_fn(name, ["lits_11_20111509.nii"])
 
-    from label_analysis.helpers import get_labels, relabel
-
-    dd = load_dict(
-        "/home/ub/datasets/preprocessed/lits/patches/spc_100_100_200/dim_256_256_128/bboxes_info.pkl"
-    )
-
-    fn = Path(
-        "/s/fran_storage/predictions/litsmc/LITS-933_fixed_mc/crc_CRC154_20140712_ABDOMEN.nii.gz"
-    )
-    fldr = Path("/s/xnat_shadow/crc/lms_staging/")
-    fn_out = fldr / fn.name
-    import SimpleITK as sitk
-
-    lm = sitk.ReadImage(str(fn))
-    get_labels(lm)
-    lm = relabel(lm, {3: 2})
-    sitk.WriteImage(lm, str(fn_out))
-
-    dd[0]
-    from fran.utils.common import *
+# %%

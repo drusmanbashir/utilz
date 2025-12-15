@@ -12,7 +12,6 @@ pandas>=2.2.3
 PyYAML>=6.0.2
 ray[tune]
 SimpleITK>=2.2.0
-torch
 torchvision
 torchaudio
 tqdm>=4.66.5
