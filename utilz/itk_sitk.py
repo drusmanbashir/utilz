@@ -123,3 +123,43 @@ def get_scale_factor_from_spacings (sz_source, spacing_source, spacing_dest):
             scale_factor = [a / b for a, b in zip(spacing_source, spacing_dest)]
             sz_dest= [round(a*b )for a,b in zip(sz_source,scale_factor)]
             return sz_dest, scale_factor
+
+def aip(niifn,niifn_out,max_thickness=3.0):
+        from torch import nn
+        print("Processing file {}".format(niifn))
+        im_ni = sitk.ReadImage(niifn)
+
+        st_org = im_ni.GetSpacing()[-1]
+        
+        if st_org>= max_thickness:
+            print("Already thick slice-image ({0}mm). Skipping {1}".format(st_org,niifn))
+        else:
+            if st_org >0.9 and st_org<1.5:
+                step=3
+            elif st_org <0.9:
+                step=5
+
+            elif st_org >=1.5 and st_org <max_thickness:
+                step =2
+            im_np= sitk.GetArrayFromImage(im_ni)
+            im = torch.tensor(im_np).float()
+            n_slice = im_np.shape[0]
+            in_plane = im_np.shape[1:]   
+            im1d = im.view(n_slice,-1)
+            im1d= im1d.unsqueeze(1)
+            av = nn.Conv1d(1,1, 3,padding=1)
+            filt = nn.parameter.Parameter(torch.ones_like(av.weight))
+            av.weight = filt
+            imthic = av(im1d)
+            imthic = imthic.view(-1,*in_plane)
+            imthic = imthic[::step,:]
+            imthic_np = imthic.detach().numpy()
+            im_out = sitk.GetImageFromArray(imthic_np)
+            im_out = align_sitk_imgs(im_out,im_ni)
+            outthickness  = st_org*step
+            outthickness = np.minimum(max_thickness,outthickness)
+            spacing= im_out.GetSpacing()
+            spacing = (spacing[0],spacing[1],outthickness)
+            im_out.SetSpacing(spacing)
+            print("Starting nslices: {0}. Final nslices: {1}".format(n_slice,imthic_np.shape[0]))
+            sitk.WriteImage(im_out,niifn_out)

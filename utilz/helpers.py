@@ -27,6 +27,7 @@ from utilz.string import (cleanup_fname, dec_to_str, info_from_filename,
 tr = ipdb.set_trace
 import gc, sys
 
+CASEID_TAGS = ["case_id", "all", "desc", "date"]  # all means identical filename
 
 # from utilz.fileio import *
 
@@ -593,11 +594,10 @@ def get_train_valid_test_lists_from_json(
 def find_matching_fn(
     src_fn: Path,
     target_fns: Union[list, Path],
-    tags=["case_id"],
+    tags: list=["case_id"],
     allow_multiple_matches=False,
 ) -> Union[Path, list]:
-    allowed_tags = ["case_id", "all", "desc", "date"]  # all means identical filename
-    assert set(tags).issubset(allowed_tags), "Allowed tags are {0}".format(allowed_tags)
+    assert set(tags).issubset(CASEID_TAGS), "Allowed tags are {0}. \n You gave {1}".format(CASEID_TAGS, tags)
     if isinstance(target_fns, Path) and target_fns.is_dir():
         assert (target_fns.exists()), "Target directory does not exist"
         target_fns = list(target_fns.glob("*"))
