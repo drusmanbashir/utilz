@@ -3,6 +3,7 @@ from typing import Optional, Tuple
 import collections
 import multiprocessing as mp
 import logging
+from tqdm.auto import tqdm
 
 import os
 import pprint
@@ -354,10 +355,11 @@ def multiprocess_multiarg(
       - If num_processes<=0/None, we auto-size from available CPUs (leave 1 for parent).
     """
     # choose a progress bar adapter
-    try:
-        pbar_fn = get_pbar() if progress_bar else (lambda x: x)
-    except NameError:
-        pbar_fn = _pbar_default if progress_bar else (lambda x: x)
+
+    if progress_bar:
+        pbar_fn = tqdm
+    else:
+        pbar_fn = lambda x: x
 
     # size the pool
     if not num_processes or num_processes < 1:
