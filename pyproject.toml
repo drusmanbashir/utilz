@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=69", "setuptools-scm>=8", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "utilz"
+description = "Utility functions and helpers for medical imaging and ML workflows"
+requires-python = ">=3.9"
+dynamic = ["version"]
+
+authors = [{ name = "Usman Bashir" }]
+
+# -------------------------
+# BASE (SAFE) DEPENDENCIES
+# -------------------------
+# Must be pure Python or widely ABI-stable wheels
+dependencies = [
+  "fastcore==1.7.29",
+  "fasttransform==0.0.2",
+
+  "numpy>=2,<3",
+  "pandas>=2.2.3",
+  "PyYAML>=6.0.2",
+  "tqdm>=4.66.5",
+
+  "beautifulsoup4>=4.13.3",
+]
+
+[project.optional-dependencies]
+
+# -------------------------
+# DEV / INTERACTIVE
+# -------------------------
+dev = [
+  "pytest>=8.3.3",
+  "ipdb>=0.13.13",
+  "ipython>=8.12.3",
+  "ipywidgets>=8.1.3",
+]
+
+# -------------------------
+# ML STACK (NO ITK)
+# -------------------------
+ml = [
+  "torchvision",
+  "torchaudio",
+  "ray[tune]",
+]
+
+# -------------------------
+# IMAGING (DANGEROUS IN SLICER)
+# -------------------------
+# Explicit opt-in only
+imaging = [
+  "itk>=5.4.2.post1",
+  "SimpleITK>=2.2.0",
+]
+
+# -------------------------
+# FULL (EVERYTHING)
+# -------------------------
+full = [
+  "utilz[dev,ml,imaging]",
+]
+
+[tool.setuptools.packages.find]
+include = ["utilz*"]
+
+[tool.setuptools_scm]
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-date"
