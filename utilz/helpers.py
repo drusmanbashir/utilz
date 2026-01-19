@@ -1,17 +1,14 @@
 # %%
-from typing import Optional, Tuple
 import collections
-import multiprocessing as mp
 import logging
-from tqdm.auto import tqdm
-
+import multiprocessing as mp
 import os
 import pprint
 import re
 from functools import partial, wraps
 from pathlib import Path
 from time import time
-from typing import Union
+from typing import Optional, Tuple, Union
 
 import ipdb
 import numpy as np
@@ -19,6 +16,7 @@ import pandas as pd
 import torch
 from ipdb.__main__ import get_ipython
 from tqdm import tqdm as tqdm_ip
+from tqdm.auto import tqdm
 
 from utilz.dictopts import *
 from utilz.fileio import is_img_file, load_dict, str_to_path
@@ -26,7 +24,8 @@ from utilz.string import (cleanup_fname, dec_to_str, info_from_filename,
                           path_to_str, regex_matcher)
 
 tr = ipdb.set_trace
-import gc, sys
+import gc
+import sys
 
 CASEID_TAGS = ["case_id", "all", "desc", "date"]  # all means identical filename
 
@@ -37,6 +36,7 @@ def set_autoreload_ray():
     # gals = globals()
     # print(gals.keys)
     import ray
+
     if "get_ipython" in globals() and not any(
         ["APPLAUNCHER_0_PATH" in os.environ, ray.is_initialized()]
     ):
@@ -48,11 +48,12 @@ def set_autoreload_ray():
             ipython.run_line_magic("load_ext", "autoreload")
             ipython.run_line_magic("autoreload", "2")
 
+
 def set_autoreload():
     # gals = globals()
     # print(gals.keys)
     if "get_ipython" in globals() and not "APPLAUNCHER_0_PATH" in os.environ:
-    
+
         print("setting autoreload")
         from IPython import get_ipython
 
@@ -84,6 +85,7 @@ def timing(f):
         return result
 
     return wrap
+
 
 def range_inclusive(start, end):
     return range(start, end + 1)
@@ -278,9 +280,9 @@ def _limit_threads_for_io():
     except Exception:
         pass
 
+
 def _limit_threads_for_numeric(
-    workers: Optional[int] = None, 
-    per_proc_threads: Optional[int] = None
+    workers: Optional[int] = None, per_proc_threads: Optional[int] = None
 ) -> Tuple[int, int]:
     """
     Balanced config for NumPy/ITK/PyRadiomics-heavy work.
@@ -318,6 +320,7 @@ def _limit_threads_for_numeric(
 
     try:
         import torch
+
         torch.set_num_threads(per_proc_threads)
         torch.set_num_interop_threads(1)  # keep inter-op low
     except Exception:
@@ -325,11 +328,13 @@ def _limit_threads_for_numeric(
 
     try:
         import itk
+
         itk.MultiThreaderBase.SetGlobalDefaultNumberOfThreads(per_proc_threads)
     except Exception:
         pass
 
     return workers, per_proc_threads
+
 
 def multiprocess_multiarg(
     func,
@@ -454,17 +459,20 @@ def get_available_device(max_memory=0.8) -> int:
 
 
 def resolve_device(device):
-    assert device in [
-        "cuda",
-        "cpu",
-        0,
-        1,
-    ], "Device has to be either 'cpu' , 'gpu' or an integer"
-    if device == "cpu":
-        return "cpu"
-    if device == "cuda":
-        device = 0
-    device = torch.device("cuda:{}".format(device))
+    try:
+        device = torch.device(device)
+    except:
+        assert device in [
+            "cuda",
+            "cpu",
+            0,
+            1,
+        ], "Device has to be either 'cpu' , 'gpu' or an integer"
+        if device == "cpu":
+            return "cpu"
+        if device == "cuda":
+            device = 0
+        device = torch.device("cuda:{}".format(device))
     return device
 
 
@@ -596,12 +604,14 @@ def get_train_valid_test_lists_from_json(
 def find_matching_fn(
     src_fn: Path,
     target_fns: Union[list, Path],
-    tags: list=["case_id"],
+    tags: list = ["case_id"],
     allow_multiple_matches=False,
-) -> Union[Path, list]:
-    assert set(tags).issubset(CASEID_TAGS), "Allowed tags are {0}. \n You gave {1}".format(CASEID_TAGS, tags)
+) -> list:
+    assert set(tags).issubset(
+        CASEID_TAGS
+    ), "Allowed tags are {0}. \n You gave {1}".format(CASEID_TAGS, tags)
     if isinstance(target_fns, Path) and target_fns.is_dir():
-        assert (target_fns.exists()), "Target directory does not exist"
+        assert target_fns.exists(), "Target directory does not exist"
         target_fns = list(target_fns.glob("*"))
         target_fns = [fn for fn in target_fns if is_img_file(fn)]
     assert len(target_fns) > 0, "List of candidate filenames is empty"
@@ -625,17 +635,18 @@ def find_matching_fn(
                 for k in tags_src.keys() & tags_target.keys()
             ):
                 matching_target_fns.append(target_fn)
-    if len(matching_target_fns) == 1:
-        return matching_target_fns[0]
-    elif len(matching_target_fns) == 0:
-        raise Exception("No files matching {0} found".format(src_fn))
-    # elif len(matching_mask_fns)==0: return None
-    elif len(matching_target_fns) > 1 and allow_multiple_matches == False:
+
+    if len(matching_target_fns) > 1 and allow_multiple_matches == False:
         raise Exception(
             "Multiple files matching {0} found:\n{1}".format(
                 src_fn, matching_target_fns
             )
         )
+    elif len(matching_target_fns) == 0:
+        raise Exception(
+            "No files matching {0} found:\n{1}".format(src_fn, matching_target_fns)
+        )
+
     else:
         return matching_target_fns
 
