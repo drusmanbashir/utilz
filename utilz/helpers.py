@@ -659,7 +659,7 @@ def create_df_from_folder(folder):
     lm_fns = list(lms_fldr.glob("*"))
     dicis = []
     for img_fn in image_fns:
-        lm_fn = find_matching_fn(img_fn, lm_fns, tags=["case_id"])
+        lm_fn = find_matching_fn(img_fn, lm_fns, tags=["case_id"])[0]
         case_id = info_from_filename(lm_fn.name, full_caseid=True)["case_id"]
         dici = {"image": img_fn, "lm": lm_fn, "case_id": case_id}
         dicis.append(dici)
