@@ -72,15 +72,21 @@ def infer_dataset_name(filename):
 
 
 def strip_extension(fname: str)->str:
-    """Remove file extension from filename."""
-    exts = ".mrk.json .npy .seg.nrrd .nii.gz.nrrd .nii.gz .nii .nrrd .pt ".split(" ")
-    for e in exts:
-        pat = r"{}$".format(e)
-        fname_stripped = re.sub(pat, "", fname)
-        if fname_stripped != fname:
-            return fname_stripped
-    fname_stripped = fname.split(".")[0]
-    return fname_stripped
+    """Remove terminal image/annotation extensions, including chained endings."""
+    exts = [".seg.nrrd", ".nii.gz.nrrd", ".mrk.json", ".nii.gz", ".nrrd", ".nii", ".npy", ".pt"]
+    while True:
+        changed = False
+        lower = fname.lower()
+        for e in exts:
+            if lower.endswith(e):
+                fname = fname[: -len(e)]
+                changed = True
+                break
+        if not changed:
+            break
+    if "." in fname:
+        fname = fname.split(".")[0]
+    return fname
 
 
 def replace_extension(fname: str, new_ext: str):
@@ -91,15 +97,15 @@ def replace_extension(fname: str, new_ext: str):
 
 
 def strip_slicer_strings(fname: str):
-    """Remove Slicer-specific strings from filename."""
-    pt = re.compile(r"(_\\d)?$", re.IGNORECASE)
-    pt2 = re.compile(r"(_\\d)?-segment.*$", re.IGNORECASE)
-    fname = fname.replace("-label", "")
-    fname = fname.replace("-test", "")
-    fname_cl1 = fname.replace("-tissue", "")
-    fname_cl2 = re.sub(pt, "", fname_cl1)
-    fname_cl3 = re.sub(pt2, "", fname_cl2)
-    return fname_cl3
+    """Remove Slicer-specific suffix tokens and trailing index markers."""
+    fname = re.sub(r"[-_]?label", "", fname, flags=re.IGNORECASE)
+    fname = re.sub(r"[-_]?test", "", fname, flags=re.IGNORECASE)
+    fname = re.sub(r"[-_]?tissue", "", fname, flags=re.IGNORECASE)
+    fname = re.sub(r"[-_]?segment.*$", "", fname, flags=re.IGNORECASE)
+    fname = re.sub(r"[_-]?\\d+$", "", fname)
+    fname = re.sub(r"[_-]{2,}", "_", fname)
+    fname = fname.strip("_-")
+    return fname
 
 
 def str_to_path(arg_inds=None):
@@ -141,15 +147,10 @@ def path_to_str(fnc):
 
 
 def cleanup_fname(fname: str):
-    """Clean up filename by removing extensions and slicer strings if needed."""
+    """Normalize filename to stable project_case_date[_desc] form."""
+    fname = strip_slicer_strings(fname)
     fname = strip_extension(fname)
-
-    pt_token = "(_[a-z0-9]*)"
-    tokens = re.findall(pt_token, fname)
-    if (
-        len(tokens) > 1
-    ):  # this will by pass short filenames with single digit pt id confusing with slicer suffix _\\d
-        fname = strip_slicer_strings(fname)
+    fname = re.sub(r"[_-]{2,}", "_", fname).strip("_-")
     return fname
 
 

@@ -12,7 +12,7 @@ import SimpleITK as sitk
 from fastcore.basics import patch_to
 import pandas as pd
 
-from utilz.string import get_extension, str_to_path
+from utilz.stringz import get_extension, str_to_path
 
 tr = ipdb.set_trace
 

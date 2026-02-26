@@ -5,6 +5,7 @@
 # file to edit: dev_nb/gui_building.sync.ipynb
 import torch
 
+from matplotlib.widgets import RangeSlider, Slider
 from torch.functional import Tensor
 
 import SimpleITK as sitk
@@ -16,7 +17,6 @@ import ipywidgets
 plt.ion()
 import ipdb
 tr = ipdb.set_trace
-# %%
 
 import matplotlib as mpl
 from matplotlib import pyplot as plt
@@ -121,10 +121,6 @@ def get_window_level_numpy_array(
     return (npa_list, wl_range, wl_init)
 
 
-# %%
-
-# %%
-# %%
 
 class ImageMaskViewer(object):
     '''
@@ -191,7 +187,6 @@ class ImageMaskViewer(object):
             img_slice = img[val,:,:]
             self.ax_imgs[i].set_array(img_slice)
 
-# %%
 class ImageMaskViewer_J():
     '''
     viewer for jupyter
@@ -263,7 +258,6 @@ class ImageMaskViewer_J():
 
 
 
-# %%
 @ImageMaskViewer_J
 def viewer(*arrs):
     output_arrays=[]
@@ -274,12 +268,6 @@ def viewer(*arrs):
         else:
             output_arrays.append(arrs[ind])
     return output_arrays, ["img","mask"]
-
-
-# %%
-# %%
-
-from matplotlib.widgets import RangeSlider, Slider
 
 
 def view(*arrays,n=0, cmap_img='Greys_r', cmap_mask='RdPu_r'):
@@ -295,7 +283,6 @@ def view(*arrays,n=0, cmap_img='Greys_r', cmap_mask='RdPu_r'):
                     cmap_mask=cmap_mask)
 
 
-# %%
 def get_window_level_numpy_array(
     image_list,
     intensity_slider_range_percentile=[2, 98],
@@ -328,15 +315,23 @@ def get_window_level_numpy_array(
     return (npa_list, wl_range, wl_init)
 
 
-# %%
 
 
 # %%
 if __name__ =="__main__":
+# %%
+#SECTION:-------------------- setup--------------------------------------------------------------------------------------
 
-    i = np.load('toydata/image.npy')
-    m = np.load('toydata/preds.npy')[0]
-    I = ImageMaskViewer([i,m])
+    import torch
+    pred_fn = "/home/ub/code/fran/fran/tests/files/pred.pt"
+    img_fn = "/home/ub/code/fran/fran/tests/files/image.pt"
+    i = torch.load(img_fn, weights_only=False)
+    m = torch.load(pred_fn, weights_only=False)
+
+    n= 0
+    i2 = i[n, 0, :].cpu().detach().numpy()
+    m2 = m[n, 0, :].cpu().detach()
+    I = ImageMaskViewer([i2,m2])
 # %%
     I = ImageMaskViewer([i2,m2],intensity_slider_range_percentile=[0,100])
 # %%
@@ -344,12 +339,4 @@ if __name__ =="__main__":
     image_list, wl_range, wl_init = get_window_level_numpy_array(
         image_list,[2,98],  data_types)
 
-# %%
-    horizontal =True
-    figure_size=(10, 8)
-    # Create a figure.
-    col_num, row_num = (len(image_list), 1) if horizontal else (1, len(image_list))
-
-    # viewer expects 4d input
-    viewer(np.expand_dims(i,0),m)
 # %%

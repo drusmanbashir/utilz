@@ -20,7 +20,7 @@ from tqdm.auto import tqdm
 
 from utilz.dictopts import *
 from utilz.fileio import is_img_file, load_dict, str_to_path
-from utilz.string import (cleanup_fname, dec_to_str, info_from_filename,
+from utilz.stringz import (cleanup_fname, dec_to_str, info_from_filename,
                           path_to_str, regex_matcher)
 
 tr = ipdb.set_trace

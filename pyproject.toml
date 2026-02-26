@@ -15,7 +15,7 @@ authors = [{ name = "Usman Bashir" }]
 # -------------------------
 # Must be pure Python or widely ABI-stable wheels
 dependencies = [
-  "fastcore==1.7.29",
+  "fastcore>=1.12.16",
   "fasttransform==0.0.2",
   "ipdb>=0.13.13",
 
