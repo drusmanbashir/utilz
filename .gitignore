@@ -173,3 +173,20 @@ cython_debug/
 
 # OS-generated files
 .DS_Store
+
+# Standard ignore block
+Thumbs.db
+.idea/
+.vscode/
+*.code-workspace
+*~
+pip-wheel-metadata/
+.venv/
+.python-version
+.ruff_cache/
+.ipynb_checkpoints/
+.env.*
+*.local
+tmp/
+tmp*/
+.cache/
