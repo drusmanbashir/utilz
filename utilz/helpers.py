@@ -19,7 +19,7 @@ from tqdm import tqdm as tqdm_ip
 from tqdm.auto import tqdm
 
 from utilz.dictopts import *
-from utilz.fileio import is_img_file, load_dict, str_to_path
+from utilz.fileio import is_image_file, load_dict, str_to_path
 from utilz.stringz import (cleanup_fname, dec_to_str, info_from_filename,
                           path_to_str, regex_matcher)
 
@@ -613,7 +613,7 @@ def find_matching_fn(
     if isinstance(target_fns, Path) and target_fns.is_dir():
         assert target_fns.exists(), "Target directory does not exist"
         target_fns = list(target_fns.glob("*"))
-        target_fns = [fn for fn in target_fns if is_img_file(fn)]
+        target_fns = [fn for fn in target_fns if is_image_file(fn)]
     assert len(target_fns) > 0, "List of candidate filenames is empty"
     src_fn = cleanup_fname(src_fn.name)
     matching_target_fns = []

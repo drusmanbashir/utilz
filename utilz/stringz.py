@@ -8,9 +8,11 @@ import numpy as np
 tr = ipdb.set_trace
 import ast
 
-def ast_literal_eval(str_list) ->list[Any]:
+def ast_literal_eval(str_list) ->list|str:
     """Safely evaluate string list using ast.literal_eval."""
     if isinstance(str_list, str):
+        if all ([":" in str_list, "TSL" in str_list]):
+            return str_list
         try:
             str_list = ast.literal_eval(str_list)
         except ValueError:
@@ -176,6 +178,10 @@ def info_from_filename(fname: str, full_caseid=False):
         name = cleanup_fname(fname)
 
         parts = name.split("_")
+        # Pad parts with empty strings if there are fewer parts than tags
+        while len(parts) < len(tags):
+            parts.append("")
+        
         output_dic = {}
         for key, val in zip(tags, parts):
             output_dic[key] = val

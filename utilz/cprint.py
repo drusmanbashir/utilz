@@ -46,7 +46,6 @@ BG_COLORS = {
 }
 def cprint(
     text,
-    *,
     color=None,
     bg=None,
     bold=False,
@@ -86,6 +85,7 @@ def cprint(
 if __name__ == '__main__':
     
     cprint("OK", color="green")
+    cprint("OK", "green")
     cprint("Warning", color="yellow", bold=True, bg="red")
     cprint("Error", color="red", bold=True, underline=True)
     cprint("Note", color="blue", italic=True)
