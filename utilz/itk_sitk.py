@@ -116,13 +116,35 @@ def monai_to_sitk_image(li):
     return sitk_img, src
 
 
-def monai_to_itk_image(li, pixel_type=None):
+def monai_to_itk_image(lm, pixel_type=None):
     itk = _require_itk()
-    sitk_img, src = monai_to_sitk_image(li)
-    if pixel_type is None:
-        pixel_type = itk.UC
-    itk_img = ConvertSimpleItkImageToItkImage(sitk_img, pixel_type)
-    return itk_img, src
+    meta =  lm.meta
+    affine = meta['affine'].detach().cpu().to(torch.float64)
+    linear_ras = affine[:3, :3]
+    spacing = torch.linalg.vector_norm(linear_ras, dim=0)
+    spacing = torch.where(spacing == 0, torch.ones_like(spacing), spacing)
+    direction_ras = linear_ras / spacing
+    ras_to_lps = torch.diag(torch.tensor([-1.0, -1.0, 1.0], dtype=torch.float64))
+    direction_lps = ras_to_lps @ direction_ras
+    origin_lps = ras_to_lps @ affine[:3, 3]
+
+    lm_arr = lm.detach().cpu()
+    li = itk.GetImageFromArray(lm_arr.permute(2, 1, 0).contiguous().numpy())
+
+    ImageType = type(li)
+    info = itk.ChangeInformationImageFilter[ImageType].New(Input=li)
+    info.ChangeSpacingOn()
+    info.ChangeOriginOn()
+    info.ChangeDirectionOn()
+    info.SetOutputSpacing(tuple(float(v) for v in spacing.tolist()))
+    info.SetOutputOrigin(tuple(float(v) for v in origin_lps.tolist()))
+    info.SetOutputDirection(itk.matrix_from_array(direction_lps.numpy()))
+    info.Update()
+    li = info.GetOutput()
+    return li
+
+
+
 
 def ConvertItkImageToSimpleItkImage(
     _itk_image: "itk.Image",

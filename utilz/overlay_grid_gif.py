@@ -13,7 +13,6 @@ import threading
 import time
 from typing import Dict, Iterable, List, Sequence, Tuple
 
-import matplotlib
 import numpy as np
 import SimpleITK as sitk
 
@@ -329,6 +328,16 @@ def _rotate_clockwise_2d(arr2d: np.ndarray, rotate_cw_degrees: int) -> np.ndarra
     return np.rot90(arr2d, k=k_ccw)
 
 
+def _apply_pair_transform(arr2d: np.ndarray, pair_index: int, rotate_cw_degrees: int) -> np.ndarray:
+    # Pair-specific transforms requested by the user:
+    # panel 1 -> 90 degrees anticlockwise, panel 2 -> vertical flip.
+    if pair_index == 0:
+        arr2d = np.rot90(arr2d, k=1)
+    elif pair_index == 1:
+        arr2d = np.flipud(arr2d)
+    return _rotate_clockwise_2d(arr2d, rotate_cw_degrees=rotate_cw_degrees)
+
+
 def _pad_center_2d(arr2d: np.ndarray, target_hw: Tuple[int, int]) -> np.ndarray:
     target_h, target_w = target_hw
     h, w = arr2d.shape
@@ -412,11 +421,12 @@ def _overlay_stencil_rgb(
     image2d: np.ndarray,
     mask2d: np.ndarray,
     window: str | None = "auto",
+    pair_index: int = 0,
     rotate_cw_degrees: int = 0,
     target_hw: Tuple[int, int] | None = None,
 ) -> Tuple[np.ndarray, List[int]]:
-    image2d = _rotate_clockwise_2d(image2d, rotate_cw_degrees=rotate_cw_degrees)
-    mask2d = _rotate_clockwise_2d(mask2d, rotate_cw_degrees=rotate_cw_degrees)
+    image2d = _apply_pair_transform(image2d, pair_index=pair_index, rotate_cw_degrees=rotate_cw_degrees)
+    mask2d = _apply_pair_transform(mask2d, pair_index=pair_index, rotate_cw_degrees=rotate_cw_degrees)
     if target_hw is not None:
         image2d = _pad_center_2d(image2d, target_hw=target_hw)
         mask2d = _pad_center_2d(mask2d, target_hw=target_hw)
@@ -443,14 +453,31 @@ def _extract_slice(volume_zyx: np.ndarray, axis: int, index: int) -> np.ndarray:
     return np.take(volume_zyx, indices=index, axis=axis)
 
 
-def _orientation_target_hw(cases: Sequence[CaseVolume], axis: int, rotate_cw_degrees: int) -> Tuple[int, int]:
+def _transformed_hw(
+    hw: Tuple[int, int],
+    *,
+    pair_index: int,
+    rotate_cw_degrees: int,
+) -> Tuple[int, int]:
+    hh, ww = hw
+    if pair_index == 0:
+        hh, ww = ww, hh
+    if rotate_cw_degrees in {90, 270}:
+        hh, ww = ww, hh
+    return hh, ww
+
+
+def _orientation_target_hw(
+    cases: Sequence[CaseVolume],
+    axis: int,
+    pair_index: int,
+    rotate_cw_degrees: int,
+) -> Tuple[int, int]:
     heights: List[int] = []
     widths: List[int] = []
     for case in cases:
         sample = _extract_slice(case.image, axis=axis, index=case.image.shape[axis] // 2)
-        hh, ww = sample.shape
-        if rotate_cw_degrees in {90, 270}:
-            hh, ww = ww, hh
+        hh, ww = _transformed_hw(sample.shape, pair_index=pair_index, rotate_cw_degrees=rotate_cw_degrees)
         heights.append(hh)
         widths.append(ww)
     return max(heights), max(widths)
@@ -468,7 +495,7 @@ def _panel_frame(
     panel_parts: List[np.ndarray] = []
     labels_seen: set[int] = set()
     info_parts: List[str] = []
-    for orientation in orientations:
+    for pair_index, orientation in enumerate(orientations):
         axis = _orientation_axis(orientation)
         indices = case_frame_indices[axis]
         slice_idx = int(indices[frame_idx])
@@ -478,8 +505,9 @@ def _panel_frame(
             image2d,
             mask2d,
             window=window,
+            pair_index=pair_index,
             rotate_cw_degrees=rotate_cw_degrees,
-            target_hw=target_hw_by_axis[axis],
+            target_hw=target_hw_by_axis[axis, pair_index],
         )
         panel_parts.append(rendered)
         labels_seen.update(labels_present)
@@ -487,6 +515,90 @@ def _panel_frame(
     panel_height = max(part.shape[0] for part in panel_parts)
     panel_parts = [_pad_center_rgb(part, target_hw=(panel_height, part.shape[1])) for part in panel_parts]
     return np.concatenate(panel_parts, axis=1), sorted(labels_seen), " | ".join(info_parts)
+
+
+def _rgb_float_to_uint8(rgb: np.ndarray) -> np.ndarray:
+    return np.clip(np.round(rgb * 255.0), 0, 255).astype(np.uint8)
+
+
+def _fit_rgb_to_panel(rgb: np.ndarray, panel_hw: Tuple[int, int]) -> np.ndarray:
+    try:
+        from PIL import Image
+    except Exception as e:
+        raise RuntimeError(f"Pillow is required for GIF rendering: {e}") from e
+
+    target_h, target_w = panel_hw
+    src_h, src_w = rgb.shape[:2]
+    if src_h == target_h and src_w == target_w:
+        return rgb
+
+    scale = min(target_h / max(src_h, 1), target_w / max(src_w, 1))
+    new_h = max(1, int(round(src_h * scale)))
+    new_w = max(1, int(round(src_w * scale)))
+    resized = np.asarray(
+        Image.fromarray(rgb, mode="RGB").resize((new_w, new_h), resample=Image.Resampling.NEAREST)
+    )
+    out = np.zeros((target_h, target_w, 3), dtype=np.uint8)
+    y0 = (target_h - new_h) // 2
+    x0 = (target_w - new_w) // 2
+    out[y0 : y0 + new_h, x0 : x0 + new_w] = resized
+    return out
+
+
+def _render_grid_frames(
+    cases: Sequence[CaseVolume],
+    case_frame_indices: Sequence[Dict[int, np.ndarray]],
+    orientations: Sequence[str],
+    target_hw_by_axis: Dict[Tuple[int, int], Tuple[int, int]],
+    window: str,
+    rotate_cw_degrees: int,
+    rows: int,
+    cols: int,
+    num_frames: int,
+    panel_px: int,
+) -> List["Image.Image"]:
+    try:
+        from PIL import Image, ImageDraw
+    except Exception as e:
+        raise RuntimeError(f"Pillow is required for GIF rendering: {e}") from e
+
+    title_h = max(20, panel_px // 6)
+    line_h = max(9, panel_px // 14)
+    panel_h = panel_px
+    panel_w = panel_px
+    frames: List[Image.Image] = []
+    for frame_idx in range(num_frames):
+        canvas = np.zeros((title_h + (rows * panel_h), cols * panel_w, 3), dtype=np.uint8)
+        frame_im = Image.fromarray(canvas, mode="RGB")
+        draw = ImageDraw.Draw(frame_im)
+        draw.text((6, 4), f"Overlay Stencil Grid {rows}x{cols} | Cases: {len(cases)}", fill=(255, 255, 255))
+        for i, case in enumerate(cases):
+            panel_rgb, labels_present, panel_info = _panel_frame(
+                case,
+                frame_idx=frame_idx,
+                case_frame_indices=case_frame_indices[i],
+                orientations=orientations,
+                target_hw_by_axis=target_hw_by_axis,
+                window=window,
+                rotate_cw_degrees=rotate_cw_degrees,
+            )
+            panel_rgb_u8 = _fit_rgb_to_panel(_rgb_float_to_uint8(panel_rgb), panel_hw=(panel_h, panel_w))
+            row = i // cols
+            col = i % cols
+            y0 = title_h + (row * panel_h)
+            x0 = col * panel_w
+            frame_im.paste(Image.fromarray(panel_rgb_u8, mode="RGB"), (x0, y0))
+
+            draw.text((x0 + 4, y0 + 3), case.case_id, fill=(255, 255, 255))
+            draw.text((x0 + 4, y0 + panel_h - (2 * line_h)), f"Img {i + 1} | {panel_info}", fill=(255, 255, 255))
+            max_visible = 10
+            for line_idx, label_value in enumerate(labels_present[:max_visible]):
+                color = tuple(int(round(c * 255.0)) for c in _label_color(label_value))
+                draw.text((x0 + 4, y0 + 16 + (line_idx * line_h)), f"{label_value}", fill=color)
+            if len(labels_present) > max_visible:
+                draw.text((x0 + 4, y0 + 16 + (max_visible * line_h)), "...", fill=(255, 255, 255))
+        frames.append(frame_im)
+    return frames
 
 
 def _load_cases_from_case_dirs(
@@ -623,13 +735,10 @@ def create_nifti_overlay_grid_gif(
         case_ids: Optional case-id list to prioritize when filling panels.
         orientations: Two orientations rendered side by side in each panel.
     """
-    # Avoid forcing Agg at module-import time; only use it for headless GIF rendering.
-    if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
-        matplotlib.use("Agg", force=True)
-
-    import matplotlib.pyplot as plt
-    import matplotlib.patheffects as pe
-    from matplotlib.animation import FuncAnimation, PillowWriter
+    try:
+        from PIL import Image
+    except Exception as e:
+        raise RuntimeError(f"Pillow is required for GIF rendering: {e}") from e
 
     dataset_root = Path(dataset_root)
     output_gif = Path(output_gif)
@@ -646,8 +755,13 @@ def create_nifti_overlay_grid_gif(
     )
     orientation_axes = [_orientation_axis(name) for name in orientations]
     target_hw_by_axis = {
-        axis: _orientation_target_hw(cases, axis=axis, rotate_cw_degrees=rotate_cw_degrees)
-        for axis in orientation_axes
+        (axis, pair_index): _orientation_target_hw(
+            cases,
+            axis=axis,
+            pair_index=pair_index,
+            rotate_cw_degrees=rotate_cw_degrees,
+        )
+        for pair_index, axis in enumerate(orientation_axes)
     }
 
     def _sample_indices(depth: int) -> np.ndarray:
@@ -673,123 +787,33 @@ def create_nifti_overlay_grid_gif(
     for c in cases:
         case_frame_indices.append({axis: _sample_indices(int(c.image.shape[axis])) for axis in orientation_axes})
 
-    dpi = 300
     panel_px = max(48, int(panel_px))
-    fig_w = (cols * panel_px) / dpi
-    fig_h = (rows * panel_px) / dpi
-    fig, axes = plt.subplots(rows, cols, figsize=(fig_w, fig_h), dpi=dpi, constrained_layout=False)
-    fig.subplots_adjust(left=0.02, right=0.995, top=0.93, bottom=0.02, wspace=0.05, hspace=0.12)
-    ax_list = np.atleast_1d(axes).ravel()
-
-    artists = []
-    label_text_artists = []
-    panel_info_artists = []
-    max_label_lines = 11  # 10 labels + optional "..." overflow line
-    for i, ax in enumerate(ax_list):
-        ax.set_axis_off()
-        if i < len(cases):
-            c = cases[i]
-            frame, labels_present, panel_info = _panel_frame(
-                c,
-                frame_idx=0,
-                case_frame_indices=case_frame_indices[i],
-                orientations=orientations,
-                target_hw_by_axis=target_hw_by_axis,
-                window=window,
-                rotate_cw_degrees=rotate_cw_degrees,
-            )
-            im = ax.imshow(frame, interpolation="nearest")
-            ax.set_title(c.case_id, fontsize=7)
-            artists.append(im)
-            info_txt = ax.text(
-                0.01,
-                0.01,
-                f"Img {i + 1} | {panel_info}",
-                transform=ax.transAxes,
-                ha="left",
-                va="bottom",
-                fontsize=7,
-                color="white",
-                fontweight="bold",
-                clip_on=True,
-            )
-            info_txt.set_path_effects([pe.withStroke(linewidth=2.2, foreground="black")])
-            panel_info_artists.append(info_txt)
-            line_artists = []
-            for line_idx in range(max_label_lines):
-                txt = ax.text(
-                    0.01,
-                    0.98 - (line_idx * 0.1),
-                    "",
-                    transform=ax.transAxes,
-                    ha="left",
-                    va="top",
-                    fontsize=6,
-                    color="white",
-                    fontweight="bold",
-                    clip_on=True,
-                )
-                txt.set_path_effects([pe.withStroke(linewidth=2.0, foreground="black")])
-                line_artists.append(txt)
-            label_text_artists.append(line_artists)
-            for line_idx, label_value in enumerate(labels_present[:max_label_lines]):
-                line_artists[line_idx].set_text(f"{label_value}")
-                line_artists[line_idx].set_color(_label_color(label_value))
-            if len(labels_present) > 10:
-                line_artists[-1].set_text("...")
-                line_artists[-1].set_color((1.0, 1.0, 1.0))
-        else:
-            artists.append(None)
-            label_text_artists.append([])
-            panel_info_artists.append(None)
-
-    fig.suptitle(
-        f"Overlay Stencil Grid {rows}x{cols} | Cases: {len(cases)}",
-        fontsize=12,
-    )
-
-    def update(frame_idx: int):
-        for i, im in enumerate(artists):
-            if im is None:
-                continue
-            c = cases[i]
-            out, labels_present, panel_info = _panel_frame(
-                c,
-                frame_idx=frame_idx,
-                case_frame_indices=case_frame_indices[i],
-                orientations=orientations,
-                target_hw_by_axis=target_hw_by_axis,
-                window=window,
-                rotate_cw_degrees=rotate_cw_degrees,
-            )
-            im.set_data(out)
-            info_txt = panel_info_artists[i]
-            if info_txt is not None:
-                info_txt.set_text(f"Img {i + 1} | {panel_info}")
-            line_artists = label_text_artists[i]
-            max_visible = min(10, max(0, len(line_artists) - 1))
-            for line_idx, txt in enumerate(line_artists):
-                if line_idx < min(len(labels_present), max_visible):
-                    label_value = labels_present[line_idx]
-                    txt.set_text(f"{label_value}")
-                    txt.set_color(_label_color(label_value))
-                elif line_idx == len(line_artists) - 1 and len(labels_present) > 10:
-                    txt.set_text("...")
-                    txt.set_color((1.0, 1.0, 1.0))
-                else:
-                    txt.set_text("")
-        updated = [im for im in artists if im is not None]
-        updated.extend([txt for txt in panel_info_artists if txt is not None])
-        for lines in label_text_artists:
-            updated.extend(lines)
-        return updated
-
-    anim = FuncAnimation(fig, update, frames=num_frames, interval=int(1000 / max(fps, 1)), blit=False)
     output_gif.parent.mkdir(parents=True, exist_ok=True)
     with _Spinner("Postprocessing (encoding/optimizing GIF)"):
-        anim.save(str(output_gif), writer=PillowWriter(fps=fps))
+        frames = _render_grid_frames(
+            cases=cases,
+            case_frame_indices=case_frame_indices,
+            orientations=orientations,
+            target_hw_by_axis=target_hw_by_axis,
+            window=window,
+            rotate_cw_degrees=rotate_cw_degrees,
+            rows=rows,
+            cols=cols,
+            num_frames=num_frames,
+            panel_px=panel_px,
+        )
+        if not frames:
+            raise RuntimeError("No GIF frames were rendered")
+        frame_duration_ms = int(round(1000 / max(fps, 1)))
+        frames[0].save(
+            output_gif,
+            save_all=True,
+            append_images=frames[1:],
+            duration=frame_duration_ms,
+            loop=0,
+            disposal=2,
+        )
         _optimize_gif_palette(output_gif, colors=gif_colors)
-    plt.close(fig)
     return output_gif
 
 

@@ -31,7 +31,7 @@ def is_sitk_file(fn: Path):
 
 
 @str_to_path()
-def is_image_file(fn:Path):
+def is_img_file(fn:Path):
     """Check if file is an image file (.nii, .nrrd, .pt)."""
     if fn.is_dir(): return False
     fn_name = fn.name

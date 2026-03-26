@@ -15,17 +15,20 @@ import numpy as np
 import pandas as pd
 import torch
 from ipdb.__main__ import get_ipython
-from tqdm import tqdm as tqdm_ip
 from tqdm.auto import tqdm
 
 from utilz.dictopts import *
-from utilz.fileio import is_image_file, load_dict, str_to_path
-from utilz.stringz import (cleanup_fname, dec_to_str, info_from_filename,
-                          path_to_str, regex_matcher)
+from utilz.fileio import is_img_file, load_dict, str_to_path
+from utilz.stringz import (
+    cleanup_fname,
+    dec_to_str,
+    info_from_filename,
+    path_to_str,
+    regex_matcher,
+)
 
 tr = ipdb.set_trace
 import gc
-import sys
 
 CASEID_TAGS = ["case_id", "all", "desc", "date"]  # all means identical filename
 
@@ -53,7 +56,6 @@ def set_autoreload():
     # gals = globals()
     # print(gals.keys)
     if "get_ipython" in globals() and not "APPLAUNCHER_0_PATH" in os.environ:
-
         print("setting autoreload")
         from IPython import get_ipython
 
@@ -607,13 +609,13 @@ def find_matching_fn(
     tags: list = ["case_id"],
     allow_multiple_matches=False,
 ) -> list:
-    assert set(tags).issubset(
-        CASEID_TAGS
-    ), "Allowed tags are {0}. \n You gave {1}".format(CASEID_TAGS, tags)
+    assert set(tags).issubset(CASEID_TAGS), (
+        "Allowed tags are {0}. \n You gave {1}".format(CASEID_TAGS, tags)
+    )
     if isinstance(target_fns, Path) and target_fns.is_dir():
         assert target_fns.exists(), "Target directory does not exist"
         target_fns = list(target_fns.glob("*"))
-        target_fns = [fn for fn in target_fns if is_image_file(fn)]
+        target_fns = [fn for fn in target_fns if is_img_file(fn)]
     assert len(target_fns) > 0, "List of candidate filenames is empty"
     src_fn = cleanup_fname(src_fn.name)
     matching_target_fns = []
