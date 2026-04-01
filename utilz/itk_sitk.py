@@ -1,4 +1,6 @@
 from __future__ import annotations
+import ipdb
+tr = ipdb.set_trace
 
 import SimpleITK as sitk
 import torch
@@ -154,12 +156,10 @@ def ConvertItkImageToSimpleItkImage(
     Converts ITK image to SimpleITK image
     """
     itk = _require_itk()
-    direction_array = np.array(_itk_image.GetDirection())
-    direction = tuple(direction_array.flatten())
     array: np.ndarray = itk.GetArrayFromImage(_itk_image)
     sitk_image: sitk.Image = sitk.GetImageFromArray(array)
     sitk_image = CopyImageMetaInformationFromItkImageToSimpleItkImage(
-        sitk_image, _itk_image, _pixel_id_value, direction
+        sitk_image, _itk_image, _pixel_id_value
     )
     return sitk_image
 
@@ -186,17 +186,10 @@ def CopyImageMetaInformationFromSimpleItkImageToItkImage(
     Copies the meta information from SimpleITK image to ITK image
     """
     itk = _require_itk()
-
-    _itk_image.SetOrigin(_reference_sitk_image.GetOrigin())
-    _itk_image.SetSpacing(_reference_sitk_image.GetSpacing())
-
-    # Setting direction
-    reference_image_direction: np.ndarray = np.eye(3)
-    np_dir_vnl = itk.GetVnlMatrixFromArray(reference_image_direction)
-    itk_image_direction = _itk_image.GetDirection()
-    itk_image_direction.GetVnlMatrix().copy_in(np_dir_vnl.data_block())
-
     dimension: int = _itk_image.GetImageDimension()
+    reference_image_direction = np.array(
+        _reference_sitk_image.GetDirection(), dtype=float
+    ).reshape(dimension, dimension)
     input_image_type = type(_itk_image)
     output_image_type = itk.Image[_output_pixel_type, dimension]
 
@@ -204,6 +197,9 @@ def CopyImageMetaInformationFromSimpleItkImageToItkImage(
     castImageFilter.SetInput(_itk_image)
     castImageFilter.Update()
     result_itk_image: "itk.Image" = castImageFilter.GetOutput()
+    result_itk_image.SetOrigin(_reference_sitk_image.GetOrigin())
+    result_itk_image.SetSpacing(_reference_sitk_image.GetSpacing())
+    result_itk_image.SetDirection(itk.matrix_from_array(reference_image_direction))
     return result_itk_image
 
 
@@ -211,7 +207,6 @@ def CopyImageMetaInformationFromItkImageToSimpleItkImage(
     _sitk_image: sitk.Image,
     _reference_itk_image: "itk.Image",
     _pixel_id_value: int,
-    _direction: List[float],
 ) -> sitk.Image:
     """
     Copies the meta information from ITK image to SimpleITK image
@@ -222,7 +217,8 @@ def CopyImageMetaInformationFromItkImageToSimpleItkImage(
     reference_image_spacing: List[float] = list(_reference_itk_image.GetSpacing())
     _sitk_image.SetSpacing(reference_image_spacing)
 
-    _sitk_image.SetDirection(_direction)
+    direction = tuple(np.array(_reference_itk_image.GetDirection()).flatten())
+    _sitk_image.SetDirection(direction)
     result_sitk_image: sitk.Image = sitk.Cast(_sitk_image, _pixel_id_value)
     return result_sitk_image
 

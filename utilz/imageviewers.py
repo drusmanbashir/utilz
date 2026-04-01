@@ -95,14 +95,13 @@ def get_window_level_numpy_array(
 ):
     # to the original images. If they are deleted outside the view would become
     # invalid, so we use a copy wich guarentees that the gui is consistent.
-    if isinstance(image_list[0] ,np.ndarray):  # if images are already np_array..
-        npa_list = image_list
-    elif isinstance(image_list[0], torch.Tensor):
-        image_list = [a.detach().cpu() for a in image_list]
-        npa_list = [image_list[0].numpy(), image_list[1].numpy()]
-
-    else:
-        npa_list = list(map(sitk.GetArrayFromImage, image_list))
+    npa_list = []
+    for a in image_list:
+        npa = a.detach().cpu().numpy() if isinstance(a, torch.Tensor) else a if isinstance(a, np.ndarray) else sitk.GetArrayFromImage(a)
+        while len(npa.shape) > 3:
+            print("Selecting dim 0 from leading dim, shape:", npa.shape)
+            npa = npa[0]
+        npa_list.append(npa)
 
     wl_range = []
     wl_init = []
@@ -158,6 +157,7 @@ class ImageMaskViewer(object):
         self.slider.on_changed(self.update_fig_fast)
         self.slider_wl.on_changed(lambda vals: self.ax_imgs[0].set_clim(*vals))
         plt.tight_layout()
+        self.fig.show()
 
     def create_images(self):
         ax_imgs=[]
@@ -290,13 +290,13 @@ def get_window_level_numpy_array(
 ):
     # to the original images. If they are deleted outside the view would become
     # invalid, so we use a copy wich guarentees that the gui is consistent.
-    if isinstance(image_list[0] ,np.ndarray):  # if images are already np_array..
-        npa_list = image_list
-    elif isinstance(image_list[0] ,torch.Tensor):  # if images are already np_array..type(image_list[0]) == torch.Tensor:
-        npa_list = [image_list[0].numpy(), image_list[1].numpy()]
-
-    else:
-        npa_list = list(map(sitk.GetArrayFromImage, image_list))
+    npa_list = []
+    for a in image_list:
+        npa = a.detach().cpu().numpy() if isinstance(a, torch.Tensor) else a if isinstance(a, np.ndarray) else sitk.GetArrayFromImage(a)
+        while len(npa.shape) > 3:
+            print("Selecting dim 0 from leading dim, shape:", npa.shape)
+            npa = npa[0]
+        npa_list.append(npa)
 
     wl_range = []
     wl_init = []
