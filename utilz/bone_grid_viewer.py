@@ -174,55 +174,6 @@ class PreprocessedDatasetCache:
             return data["image"], data["label"]
 
 
-def parse_args() -> argparse.Namespace:
-    default_workers = max(1, min(16, os.cpu_count() or 1))
-    parser = argparse.ArgumentParser(description="Bone 8x8 synchronized slice grid viewer")
-    parser.add_argument(
-        "--labels-dir",
-        type=Path,
-        default=Path("annotations/ULS23/novel_data/ULS23_Radboudumc_Bone/labels"),
-        help="Directory with bone label files (.nii.gz or .nii.gz.zip)",
-    )
-    parser.add_argument(
-        "--images-dir",
-        type=Path,
-        required=True,
-        help="Directory with matching bone image volumes",
-    )
-    parser.add_argument(
-        "--target-shape",
-        type=int,
-        nargs=3,
-        metavar=("X", "Y", "Z"),
-        default=None,
-        help="Target resample shape. Default: shape of first matched image",
-    )
-    parser.add_argument(
-        "--max-cases",
-        type=int,
-        default=None,
-        help="Optional limit on number of matched cases",
-    )
-    parser.add_argument(
-        "--export-page-jpg",
-        type=Path,
-        default=None,
-        help="Optional output path to save current page as JPG after each redraw",
-    )
-    parser.add_argument(
-        "--preprocess-workers",
-        type=int,
-        default=default_workers,
-        help=f"Thread workers for preprocessing (default: {default_workers})",
-    )
-    parser.add_argument(
-        "--cache-compressed",
-        action="store_true",
-        help="Write compressed .npz cache (smaller, slower). Default is uncompressed for speed.",
-    )
-    return parser.parse_args()
-
-
 def is_volume_file(path: Path) -> bool:
     name = path.name.lower()
     return any(name.endswith(s) for s in SUPPORTED_SUFFIXES)
@@ -523,8 +474,7 @@ class GridViewer:
         plt.show()
 
 
-def main() -> None:
-    args = parse_args()
+def main(args) -> None:
     labels_dir: Path = args.labels_dir
     images_dir: Path = args.images_dir
 
@@ -575,4 +525,49 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    default_workers = max(1, min(16, os.cpu_count() or 1))
+    parser = argparse.ArgumentParser(description="Bone 8x8 synchronized slice grid viewer")
+    parser.add_argument(
+        "--labels-dir",
+        type=Path,
+        default=Path("annotations/ULS23/novel_data/ULS23_Radboudumc_Bone/labels"),
+        help="Directory with bone label files (.nii.gz or .nii.gz.zip)",
+    )
+    parser.add_argument(
+        "--images-dir",
+        type=Path,
+        required=True,
+        help="Directory with matching bone image volumes",
+    )
+    parser.add_argument(
+        "--target-shape",
+        type=int,
+        nargs=3,
+        metavar=("X", "Y", "Z"),
+        default=None,
+        help="Target resample shape. Default: shape of first matched image",
+    )
+    parser.add_argument(
+        "--max-cases",
+        type=int,
+        default=None,
+        help="Optional limit on number of matched cases",
+    )
+    parser.add_argument(
+        "--export-page-jpg",
+        type=Path,
+        default=None,
+        help="Optional output path to save current page as JPG after each redraw",
+    )
+    parser.add_argument(
+        "--preprocess-workers",
+        type=int,
+        default=default_workers,
+        help=f"Thread workers for preprocessing (default: {default_workers})",
+    )
+    parser.add_argument(
+        "--cache-compressed",
+        action="store_true",
+        help="Write compressed .npz cache (smaller, slower). Default is uncompressed for speed.",
+    )
+    main(parser.parse_args())

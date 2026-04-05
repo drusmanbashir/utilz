@@ -400,33 +400,7 @@ def create_folder_crop_overlay_gifs(
     return outputs
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
-        description="Create GIFs from CT + segmentation: crop to overlay union, overlay contours from one or more labelmaps."
-    )
-    p.add_argument("--images-dir", type=Path, required=True)
-    p.add_argument("--crop-labelmaps-dir", type=Path, required=True)
-    p.add_argument("--output-dir", type=Path, required=True)
-    p.add_argument("--overlay-source", action="append", required=True, help="Format: /path/to/folder:label[,label...]. Repeat for multiple sources.")
-    p.add_argument("--crop-label", type=int, default=12)
-    p.add_argument("--margin-cm", type=float, default=10.0, help="Margin in cm, applied on x/y/z around union bbox.")
-    p.add_argument("--wl", type=float, default=40.0, help="Window level (abdominal default 40).")
-    p.add_argument("--ww", type=float, default=400.0, help="Window width (abdominal default 400).")
-    p.add_argument("--num-images", type=int, default=24, help="Number of slices/frames per GIF.")
-    p.add_argument("--fps", type=int, default=1, help="GIF playback speed (lower = slower).")
-    p.add_argument("--scale", type=int, default=1, help="Nearest-neighbor frame upscale factor.")
-    p.add_argument("--limit", type=int, default=None)
-
-    p.add_argument("--make-grid", action="store_true", help="Also create paginated animated 6x6 GIF grids.")
-    p.add_argument("--grid-rows", type=int, default=6)
-    p.add_argument("--grid-cols", type=int, default=6)
-    p.add_argument("--grid-output-dir", type=Path, default=None, help="Defaults to <output-dir>/grid_pages")
-    p.add_argument("--grid-fps", type=int, default=2)
-    return p
-
-
-def main() -> None:
-    args = _build_parser().parse_args()
+def main(args) -> None:
     overlay_sources = [_parse_overlay_source_arg(x) for x in args.overlay_source]
 
     outs = create_folder_crop_overlay_gifs(
@@ -458,4 +432,29 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Create GIFs from CT + segmentation: crop to overlay union, overlay contours from one or more labelmaps."
+    )
+    parser.add_argument("--images-dir", type=Path, required=True)
+    parser.add_argument("--crop-labelmaps-dir", type=Path, required=True)
+    parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument(
+        "--overlay-source",
+        action="append",
+        required=True,
+        help="Format: /path/to/folder:label[,label...]. Repeat for multiple sources.",
+    )
+    parser.add_argument("--crop-label", type=int, default=12)
+    parser.add_argument("--margin-cm", type=float, default=10.0, help="Margin in cm, applied on x/y/z around union bbox.")
+    parser.add_argument("--wl", type=float, default=40.0, help="Window level (abdominal default 40).")
+    parser.add_argument("--ww", type=float, default=400.0, help="Window width (abdominal default 400).")
+    parser.add_argument("--num-images", type=int, default=24, help="Number of slices/frames per GIF.")
+    parser.add_argument("--fps", type=int, default=1, help="GIF playback speed (lower = slower).")
+    parser.add_argument("--scale", type=int, default=1, help="Nearest-neighbor frame upscale factor.")
+    parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--make-grid", action="store_true", help="Also create paginated animated 6x6 GIF grids.")
+    parser.add_argument("--grid-rows", type=int, default=6)
+    parser.add_argument("--grid-cols", type=int, default=6)
+    parser.add_argument("--grid-output-dir", type=Path, default=None, help="Defaults to <output-dir>/grid_pages")
+    parser.add_argument("--grid-fps", type=int, default=2)
+    main(parser.parse_args())

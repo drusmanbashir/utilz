@@ -7,47 +7,41 @@ import torch
 
 from matplotlib.widgets import RangeSlider, Slider
 from torch.functional import Tensor
-
 import SimpleITK as sitk
-
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider, RangeSlider
-import ipywidgets 
-plt.ion()
-import ipdb
-tr = ipdb.set_trace
-
 import matplotlib as mpl
 from matplotlib import pyplot as plt
-def discrete_cmap():
-    cmap = plt.cm.jet  # define the colormap
-# extract all colors from the .jet map
-    cmaplist = [cmap(i) for i in range(cmap.N)]
-# force the first color entry to be grey
-    cmaplist[0] = (.0, .0, .0, 1.0)
-# create the new map
-    cmap = mpl.colors.LinearSegmentedColormap.from_list(
-        'Custom cmap', cmaplist, cmap.N)
+import ipywidgets
 
-    bounds = np.linspace(0, 255, 256)
-    norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
-    return cmap, norm
+plt.ion()
+
+
+def _display_figure(fig):
+    backend = mpl.get_backend().lower()
+    if "agg" in backend:
+        for candidate in ("qtagg", "qt5agg", "tkagg"):
+            try:
+                plt.switch_backend(candidate)
+                fig.canvas.draw_idle()
+                plt.show(block=False)
+                return
+            except Exception:
+                continue
+        try:
+            from IPython.display import display
+
+            display(fig)
+            return
+        except Exception:
+            pass
+    plt.show(block=False)
+
 def discrete_cmap(N, base_cmap=None):
     """Create an N-bin discrete colormap from the specified input map"""
-
-    # Note that if base_cmap is a string or None, you can simply do
-    #    return plt.cm.get_cmap(base_cmap, N)
-    # The following works for string, None, or a colormap instance:
-
     base = plt.cm.get_cmap(base_cmap)
     color_list = base(np.linspace(0, 1, N))
     cmap_name = base.name + str(N)
     return base.from_list(cmap_name, color_list, N)
-import numpy as np
-x = np.random.rand(20)  # define the data
-y = np.random.rand(20)  # define the data
-tag = np.random.randint(0, 20, 20)
 
 def fix_labels(x):
             if x.GetPixelID()==22:
@@ -88,39 +82,6 @@ def view(a,b,n=0, cmap_img='Greys_r', cmap_mask='RdPu_r'):
 
 
 
-def get_window_level_numpy_array(
-    image_list,
-    intensity_slider_range_percentile=[2, 98],
-    dtypes='im'
-):
-    # to the original images. If they are deleted outside the view would become
-    # invalid, so we use a copy wich guarentees that the gui is consistent.
-    npa_list = []
-    for a in image_list:
-        npa = a.detach().cpu().numpy() if isinstance(a, torch.Tensor) else a if isinstance(a, np.ndarray) else sitk.GetArrayFromImage(a)
-        while len(npa.shape) > 3:
-            print("Selecting dim 0 from leading dim, shape:", npa.shape)
-            npa = npa[0]
-        npa_list.append(npa)
-
-    wl_range = []
-    wl_init = []
-    # We need to iterate over the images because they can be a mix of
-    # grayscale and color images. If they are color we set the wl_rangenotebooks/nbs/gui_building.sync.py
-    # to [0,255] and the wl_init is equal, ignoring the window_level_list
-    # entry.
-    for npa, data_type in zip(npa_list, dtypes):
-        if data_type == "i":
-            min_max = np.percentile(npa.flatten(),
-                                    intensity_slider_range_percentile)
-        else:
-            min_max = [npa.min(), npa.max()]
-        wl_range.append((min_max[0], min_max[1]))
-        wl_init.append(wl_range[-1])
-    return (npa_list, wl_range, wl_init)
-
-
-
 class ImageMaskViewer(object):
     '''
     expects numpy  depth x width x height
@@ -156,8 +117,8 @@ class ImageMaskViewer(object):
         self.ax_imgs = self.create_images()
         self.slider.on_changed(self.update_fig_fast)
         self.slider_wl.on_changed(lambda vals: self.ax_imgs[0].set_clim(*vals))
-        plt.tight_layout()
-        self.fig.show()
+        self.fig.subplots_adjust(bottom=0.14)
+        _display_figure(self.fig)
 
     def create_images(self):
         ax_imgs=[]
@@ -250,7 +211,6 @@ class ImageMaskViewer_J():
                           vmax=self.slider_wl.val[1])
 
     def change_fig_windowing(self, wl_range):
-        tr()
         self.axises[0].imshow(self.image_list[0][self.slider.val, :],
                               cmap=self.cmap_img,
                               vmin=wl_range[0],

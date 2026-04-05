@@ -53,16 +53,24 @@ def set_autoreload_ray():
 
 
 def set_autoreload():
-    # gals = globals()
-    # print(gals.keys)
-    if "get_ipython" in globals() and not "APPLAUNCHER_0_PATH" in os.environ:
-        print("setting autoreload")
-        from IPython import get_ipython
+    if "APPLAUNCHER_0_PATH" in os.environ:
+        return
+    import importlib
+    from IPython import get_ipython
 
-        ipython = get_ipython()
-        if ipython:
-            ipython.run_line_magic("load_ext", "autoreload")
-            ipython.run_line_magic("autoreload", "2")
+    ipython = get_ipython()
+    if ipython:
+        print("setting autoreload")
+        ipython.run_line_magic("load_ext", "autoreload")
+        ipython.run_line_magic("autoreload", "1")
+        for path in os.environ["PYTHONPATH"].split(":"):
+            module_name = path.rstrip("/").split("/")[-1]
+            if module_name:
+                try:
+                    importlib.import_module(module_name)
+                except ModuleNotFoundError:
+                    continue
+                ipython.run_line_magic("aimport", module_name)
 
 
 def test_modified(filename, ndays: int = 1):
