@@ -18,7 +18,7 @@ plt.ion()
 
 def _display_figure(fig):
     backend = mpl.get_backend().lower()
-    if "agg" in backend:
+    if backend == "agg":
         for candidate in ("qtagg", "qt5agg", "tkagg"):
             try:
                 plt.switch_backend(candidate)
@@ -114,9 +114,11 @@ class ImageMaskViewer(object):
                                      label="Window level",
                                      valmin=self.wl_range[0][0],
                                      valmax=self.wl_range[0][1])
+        self.slider.drawon = False
+        self.slider_wl.drawon = False
         self.ax_imgs = self.create_images()
         self.slider.on_changed(self.update_fig_fast)
-        self.slider_wl.on_changed(lambda vals: self.ax_imgs[0].set_clim(*vals))
+        self.slider_wl.on_changed(self.update_window_level)
         self.fig.subplots_adjust(bottom=0.14)
         _display_figure(self.fig)
 
@@ -144,9 +146,15 @@ class ImageMaskViewer(object):
         return ax_imgs
 
     def update_fig_fast(self,val):
+        val = int(round(val))
         for i, img in enumerate(self.npa_list):
             img_slice = img[val,:,:]
             self.ax_imgs[i].set_array(img_slice)
+        self.fig.canvas.draw_idle()
+
+    def update_window_level(self, vals):
+        self.ax_imgs[0].set_clim(*vals)
+        self.fig.canvas.draw_idle()
 
 class ImageMaskViewer_J():
     '''
