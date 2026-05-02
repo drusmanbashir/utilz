@@ -83,23 +83,6 @@ def load_sinclair_hpc_path_mapping():
     return load_yaml(mapping_fn)
 
 
-def root_resolver(pathlike):
-    path_str = str(pathlike)
-    if is_hpc():
-        mapping = load_sinclair_hpc_path_mapping()
-        for src_root, dest_root in sorted(
-            mapping.items(), key=lambda item: len(item[0]), reverse=True
-        ):
-            if path_str.startswith(src_root):
-                cold_storage = load_yaml(
-                    Path(os.environ["FRAN_CONF"]) / "config.yaml"
-                )["cold_storage_folder"]
-                dest_root = dest_root.replace("$COLD_STORAGE", cold_storage)
-                path_str = path_str.replace(src_root, dest_root, 1)
-                break
-    return Path(path_str)
-
-
 def test_modified(filename, ndays: int = 1):
     """
     returns true if file was modified in last ndays
