@@ -33,7 +33,16 @@ import gc
 CASEID_TAGS = ["case_id", "all", "desc", "date"]  # all means identical filename
 
 # from utilz.fileio import *
+class MatchError(Exception):
+    """Base class for filename matching errors."""
 
+
+class MultipleMatchesError(MatchError):
+    """Raised when more than one file matches the search criteria."""
+
+
+class NoMatchError(MatchError):
+    """Raised when no file matches the search criteria."""
 
 def set_autoreload_ray():
     # gals = globals()
@@ -55,22 +64,14 @@ def set_autoreload_ray():
 def set_autoreload():
     if "APPLAUNCHER_0_PATH" in os.environ:
         return
-    import importlib
     from IPython import get_ipython
 
     ipython = get_ipython()
-    if ipython:
-        print("setting autoreload")
-        ipython.run_line_magic("load_ext", "autoreload")
-        ipython.run_line_magic("autoreload", "1")
-        for path in os.environ["PYTHONPATH"].split(":"):
-            module_name = path.rstrip("/").split("/")[-1]
-            if module_name:
-                try:
-                    importlib.import_module(module_name)
-                except ModuleNotFoundError:
-                    continue
-                ipython.run_line_magic("aimport", module_name)
+    if not ipython:
+        return
+    print("setting autoreload")
+    ipython.run_line_magic("load_ext", "autoreload")
+    ipython.run_line_magic("autoreload", "2")
 
 
 def test_modified(filename, ndays: int = 1):
@@ -647,13 +648,13 @@ def find_matching_fn(
                 matching_target_fns.append(target_fn)
 
     if len(matching_target_fns) > 1 and allow_multiple_matches == False:
-        raise Exception(
+        raise MatchError(
             "Multiple files matching {0} found:\n{1}".format(
                 src_fn, matching_target_fns
             )
         )
     elif len(matching_target_fns) == 0:
-        raise Exception(
+        raise MatchError(
             "No files matching {0} found:\n{1}".format(src_fn, matching_target_fns)
         )
 
@@ -728,3 +729,4 @@ if __name__ == "__main__":
     find_matching_fn(name, ["lits_11_20111509.nii"])
 
 # %%
+

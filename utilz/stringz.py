@@ -1,9 +1,10 @@
 import re
 from pathlib import Path
-from typing import Any
-from fastcore.basics import Union, listify
+from typing import Any, Union
 import ipdb
 import numpy as np
+
+from utilz.listify import listify
 
 tr = ipdb.set_trace
 import ast
