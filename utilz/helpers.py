@@ -18,7 +18,7 @@ from ipdb.__main__ import get_ipython
 from tqdm.auto import tqdm
 
 from utilz.dictopts import *
-from utilz.fileio import is_img_file, load_dict, str_to_path
+from utilz.fileio import is_img_file, load_dict, load_yaml, str_to_path
 from utilz.stringz import (
     cleanup_fname,
     dec_to_str,
@@ -72,6 +72,32 @@ def set_autoreload():
     print("setting autoreload")
     ipython.run_line_magic("load_ext", "autoreload")
     ipython.run_line_magic("autoreload", "2")
+
+
+def is_hpc():
+    return os.environ["USER"] == "mpx588"
+
+
+def load_sinclair_hpc_path_mapping():
+    mapping_fn = Path(os.environ["FRAN_CONF"]) / "sinclair_hpc_path_mapping.yaml"
+    return load_yaml(mapping_fn)
+
+
+def root_resolver(pathlike):
+    path_str = str(pathlike)
+    if is_hpc():
+        mapping = load_sinclair_hpc_path_mapping()
+        for src_root, dest_root in sorted(
+            mapping.items(), key=lambda item: len(item[0]), reverse=True
+        ):
+            if path_str.startswith(src_root):
+                cold_storage = load_yaml(
+                    Path(os.environ["FRAN_CONF"]) / "config.yaml"
+                )["cold_storage_folder"]
+                dest_root = dest_root.replace("$COLD_STORAGE", cold_storage)
+                path_str = path_str.replace(src_root, dest_root, 1)
+                break
+    return Path(path_str)
 
 
 def test_modified(filename, ndays: int = 1):
@@ -729,4 +755,3 @@ if __name__ == "__main__":
     find_matching_fn(name, ["lits_11_20111509.nii"])
 
 # %%
-
