@@ -1,17 +1,9 @@
 """Tests for utilz.random_word_maker tiered name-selection."""
-import importlib.util
-import sys
 import yaml
 import pytest
 from pathlib import Path
 
-# Import random_word_maker directly to avoid triggering utilz/__init__.py,
-# which depends on optional heavy packages (torch, etc.) not available in CI.
-_rwm_path = Path(__file__).parent.parent / "utilz" / "random_word_maker.py"
-_spec = importlib.util.spec_from_file_location("random_word_maker", _rwm_path)
-rwm = importlib.util.module_from_spec(_spec)
-sys.modules.setdefault("random_word_maker", rwm)
-_spec.loader.exec_module(rwm)
+import utilz.random_word_maker as rwm
 
 
 # ---------------------------------------------------------------------------
