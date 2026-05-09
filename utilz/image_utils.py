@@ -4,14 +4,25 @@ import numpy as np
 from numpy.core.fromnumeric import resize
 import torch
 import SimpleITK as sitk
-from utilz.fileio import save_np
 from utilz.helpers import abs_list
 import torch.nn.functional as F
 import ipdb
 
-from utilz.stringz import cleanup_fname
+from utilz.stringz import cleanup_fname, save_np
 
 tr = ipdb.set_trace
+
+
+def margin_mm_to_vox(margin_mm, spacing):
+    spacing = np.asarray(spacing, dtype=float)
+    if np.isscalar(margin_mm):
+        margin_mm = np.full(len(spacing), float(margin_mm), dtype=float)
+    else:
+        margin_mm = np.asarray(margin_mm, dtype=float)
+    return np.asarray(
+        [int(np.ceil(margin_mm[axis] / spacing[axis])) for axis in range(len(spacing))],
+        dtype=int,
+    )
 
 
 

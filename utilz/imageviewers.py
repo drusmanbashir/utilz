@@ -51,6 +51,7 @@ __all__ = [
 
 IMAGE_DTYPES = {"i", "img", "image"}
 MASK_DTYPES = {"m", "mask", "label", "lm", "labelimage"}
+DISPLAY_ORIENTATION = "LPS"
 
 
 def discrete_cmap(n_bins, base_cmap=None):
@@ -98,13 +99,31 @@ def _normalize_dtypes(dtypes, n_images):
     return [_normalize_dtype(token) for token in tokens]
 
 
+def _oriented_sitk_array(image):
+    oriented = sitk.DICOMOrient(fix_labels(image), DISPLAY_ORIENTATION)
+    return sitk.GetArrayFromImage(oriented)
+
+
+def _tensor_has_affine_meta(image):
+    return hasattr(image, "meta") and image.meta is not None and "affine" in image.meta
+
+
+def _oriented_tensor_array(image):
+    from utilz.itk_sitk import monai_to_sitk_image
+
+    sitk_image, _ = monai_to_sitk_image(image)
+    return _oriented_sitk_array(sitk_image)
+
+
 def _to_numpy_array(image):
     if isinstance(image, (str, Path)):
         image = _load_path(Path(image))
-    if isinstance(image, torch.Tensor):
+    if isinstance(image, sitk.Image):
+        image = _oriented_sitk_array(image)
+    elif isinstance(image, torch.Tensor) and _tensor_has_affine_meta(image):
+        image = _oriented_tensor_array(image)
+    elif isinstance(image, torch.Tensor):
         image = image.detach().cpu().numpy()
-    elif isinstance(image, sitk.Image):
-        image = sitk.GetArrayFromImage(fix_labels(image))
     elif not isinstance(image, np.ndarray):
         raise TypeError(f"Unsupported image input type: {type(image)}")
 

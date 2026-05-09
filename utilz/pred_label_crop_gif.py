@@ -12,6 +12,7 @@ import imageio.v2 as imageio
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageSequence
 import SimpleITK as sitk
+from utilz.image_utils import margin_mm_to_vox
 
 try:
     from utilz.stringz import info_from_filename
@@ -73,7 +74,7 @@ def _axis_aligned_crop_for_label(
     size = list(label_img.GetSize())
     spacing = label_img.GetSpacing()
     margin_mm = float(margin_cm) * 10.0
-    margin_vox = [int(round(margin_mm / float(spacing[a]))) for a in range(3)]
+    margin_vox = margin_mm_to_vox(margin_mm, spacing)
 
     idx: List[int] = []
     crop_size: List[int] = []
@@ -95,7 +96,7 @@ def _axis_aligned_crop_for_overlay_union(
     size = list(reference_img.GetSize())
     spacing = reference_img.GetSpacing()
     margin_mm = float(margin_cm) * 10.0
-    margin_vox = [int(round(margin_mm / float(spacing[a]))) for a in range(3)]
+    margin_vox = margin_mm_to_vox(margin_mm, spacing)
 
     mins = [size[0], size[1], size[2]]
     maxs = [-1, -1, -1]

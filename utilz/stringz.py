@@ -1,28 +1,32 @@
+import ast
 import re
+import shutil
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Union
+from typing import Union
+
 import ipdb
 import numpy as np
-
 from utilz.listify import listify
 
-tr = ipdb.set_trace
-import ast
 
-def ast_literal_eval(str_list) ->list|str:
+def ast_literal_eval(str_list) -> list | str:
     """Safely evaluate string list using ast.literal_eval."""
     if isinstance(str_list, str):
-        if all ([":" in str_list, "TSL" in str_list]):
+        if all([":" in str_list, "TSL" in str_list]):
             return str_list
         try:
             str_list = ast.literal_eval(str_list)
         except ValueError:
-            str_list = [t.strip(" '\"") for t in str_list.strip()[1:-1].split(',') if t.strip()]
+            str_list = [
+                t.strip(" '\"") for t in str_list.strip()[1:-1].split(",") if t.strip()
+            ]
     return str_list
 
 
 def regex_matcher(indx=0):
     """Decorator to match regex patterns and return specific group."""
+
     def _outer(func):
 
         def _inner(*args, **kwargs):
@@ -36,15 +40,6 @@ def regex_matcher(indx=0):
     return _outer
 
 
-def dec_to_str(val: float, trailing_zeros=3):
-    """Convert decimal to string with specified trailing zeros."""
-    val2 = str(round(val, 2))
-    val2 = val2.replace(".", "")
-    trailing_zeros = (
-        np.maximum(trailing_zeros - len(val2), 0) if trailing_zeros > 0 else 0
-    )
-    val2 = val2 + "0" * trailing_zeros  # ensure 3 digits
-    return val2
 
 
 def int_to_str(val: int, total_length=5):
@@ -52,6 +47,20 @@ def int_to_str(val: int, total_length=5):
     val = str(val)
     precending_zeros = total_length - len(val)
     return "0" * precending_zeros + val
+
+
+def delete_unwanted_files_folders(
+    parent, delete_these=["SECTRA", "README", "ComponentUpdate", "Viewer", "DICOMDIR"]
+):
+    dd = list(parent.rglob("*"))
+    for dirr in dd:
+        if dirr.exists():
+            if any((match := substring) in str(dirr) for substring in delete_these):
+                print("Deleting {}".format(dirr))
+                if dirr.is_file() == True:
+                    dirr.unlink()
+                else:
+                    shutil.rmtree(dirr)
 
 
 def headline(inp: str):
@@ -68,15 +77,35 @@ def append_time(input_str, now=True):
     return input_str + dt_string
 
 
+def dec_to_str(val: float, trailing_zeros=3):
+    """Convert decimal to string with specified trailing zeros."""
+    val2 = str(round(val, 2))
+    val2 = val2.replace(".", "")
+    trailing_zeros = (
+        np.maximum(trailing_zeros - len(val2), 0) if trailing_zeros > 0 else 0
+    )
+    val2 = val2 + "0" * trailing_zeros
+    return val2
+
+
 def infer_dataset_name(filename):
     """Extract dataset name from filename using regex pattern."""
     pat = "^([^-_]*)"
     return pat, filename.name
 
 
-def strip_extension(fname: str)->str:
+def strip_extension(fname: str) -> str:
     """Remove terminal image/annotation extensions, including chained endings."""
-    exts = [".seg.nrrd", ".nii.gz.nrrd", ".mrk.json", ".nii.gz", ".nrrd", ".nii", ".npy", ".pt"]
+    exts = [
+        ".seg.nrrd",
+        ".nii.gz.nrrd",
+        ".mrk.json",
+        ".nii.gz",
+        ".nrrd",
+        ".nii",
+        ".npy",
+        ".pt",
+    ]
     while True:
         changed = False
         lower = fname.lower()
@@ -139,6 +168,7 @@ def str_to_path(arg_inds=None):
 
 def path_to_str(fnc):
     """Decorator to convert Path objects to strings."""
+
     def inner(*args, **kwargs):
         args = map(str, args)
         for k, v in kwargs.items():
@@ -182,12 +212,14 @@ def info_from_filename(fname: str, full_caseid=False):
         # Pad parts with empty strings if there are fewer parts than tags
         while len(parts) < len(tags):
             parts.append("")
-        
+
         output_dic = {}
         for key, val in zip(tags, parts):
             output_dic[key] = val
         if full_caseid == True:
-            output_dic["case_id"] = output_dic["proj_title"] + "_" + output_dic["case_id"]
+            output_dic["case_id"] = (
+                output_dic["proj_title"] + "_" + output_dic["case_id"]
+            )
         return output_dic
     except Exception as e:
         return {"Didn't work. filename": fname, "error message": str(e)}
@@ -219,7 +251,7 @@ def find_file(substring: str, filenames: Union[list, Path]):
 # %%
 # %%
 if __name__ == "__main__":
-    aa = range(0,3)
+    aa = range(0, 3)
 # %%
     for bb in aa:
         print(bb)
@@ -251,3 +283,8 @@ if __name__ == "__main__":
     jj = re.sub(pt, "", fname)
     print(jj)
     pt = re.compile(r"(-?label(_\\d)?)|_.*(_\\d$)", re.IGNORECASE)
+
+
+def save_np(object,filename):
+    """Save numpy array to file using numpy's save function."""
+    np.save(filename,object)

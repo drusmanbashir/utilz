@@ -74,6 +74,18 @@ def set_autoreload():
     ipython.run_line_magic("autoreload", "2")
 
 
+def in_ipython():
+    return get_ipython() is not None
+
+
+def is_close(a, b, eps=1e-5):
+    return bool(np.allclose(a, b, atol=eps, rtol=0))
+
+
+def test_eq(a, b):
+    assert a == b, f"{a!r} != {b!r}"
+
+
 def is_hpc():
     return os.environ["USER"] == "mpx588"
 
