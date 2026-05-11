@@ -148,12 +148,26 @@ def slice_list(listi, start_end: list):
     return listi[start_end[0] : start_end[1]]
 
 
-def chunks(listi, n):
-    chunk_size = round(len(listi) / n)
-    sld = [[x * chunk_size, (x + 1) * chunk_size] for x in range(0, n - 1)]
-    sld.append([(n - 1) * chunk_size, None])
-    for s in sld:
-        yield (listi[s[0] : s[1]])
+def chunks(listi, *, n_sized_chunks=None, n_chunks=None):
+    assert (n_sized_chunks is None) != (n_chunks is None)
+    if len(listi) == 0:
+        return []
+    if n_sized_chunks is not None:
+        return [
+            listi[idx : idx + n_sized_chunks]
+            for idx in range(0, len(listi), n_sized_chunks)
+        ]
+
+    n_chunks = min(n_chunks, len(listi))
+    q, r = divmod(len(listi), n_chunks)
+    out = []
+    start = 0
+    for idx in range(n_chunks):
+        size = q + (1 if idx < r else 0)
+        end = start + size
+        out.append(listi[start:end])
+        start = end
+    return out
 
 
 def merge_dicts(d1, d2):
@@ -686,14 +700,26 @@ def find_matching_fn(
 @str_to_path(0)
 def create_df_from_folder(folder):
     images_fldr = folder / ("images")
+    inds_fldr = folder/("indices")
     lms_fldr = folder / ("lms")
+    if inds_fldr.exists()==False:
+        add_inds = False
+    else:
+        add_inds = True
+
     image_fns = list(images_fldr.glob("*"))
     lm_fns = list(lms_fldr.glob("*"))
     dicis = []
     for img_fn in image_fns:
+        case_id = info_from_filename(img_fn.name, full_caseid=True)["case_id"]
         lm_fn = find_matching_fn(img_fn, lm_fns, tags=["case_id"])[0]
-        case_id = info_from_filename(lm_fn.name, full_caseid=True)["case_id"]
         dici = {"image": img_fn, "lm": lm_fn, "case_id": case_id}
+
+        ind_fn  = inds_fldr/lm_fn.name
+        if add_inds==True :
+            dici.update({"indices": ind_fn})
+            if not ind_fn.exists():
+                raise MatchError("No matching indices file found for {0}".format(lm_fn))
         dicis.append(dici)
     df = pd.DataFrame(dicis)
     return df

@@ -183,6 +183,15 @@ def save_json(dictionary, filename):
         json.dump(dictionary, f)
 
 
+def delete_files(file_names):
+    if isinstance(file_names, (str, Path)):
+        file_names = [file_names]
+    file_names = [Path(file_name) for file_name in file_names]
+    for file_name in file_names:
+        file_name.unlink()
+    return [str(file_name) for file_name in file_names]
+
+
 def save_sitk(
     img: Union[torch.Tensor, np.ndarray, sitk.Image], output_filename, verbose=True
 ):
@@ -403,5 +412,4 @@ if __name__ == "__main__":
     a = load_dict(fn)
 
 # %%
-
 
