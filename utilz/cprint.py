@@ -45,7 +45,7 @@ BG_COLORS = {
     "bright_white": "107",
 }
 def cprint(
-    text,
+    text:str,
     color=None,
     bg=None,
     bold=False,

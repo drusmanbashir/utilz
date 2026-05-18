@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from utilz.fileio import sitk_filename_to_numpy
-from utilz.helpers import create_df_from_folder, str_to_path
+from utilz.helpers import str_to_path
 from utilz.image_utils import get_bbox_from_mask
 
 
@@ -67,7 +67,11 @@ def create_dataset_snapshot(
     Each row contains: axial image, axial labelmap, coronal image, coronal labelmap.
     Slice selection is driven by the central slice of the non-zero label bounding box.
     """
-    df = create_df_from_folder(dataset_root)
+    from fran.preprocessing.helpers import create_df_from_folders
+    df = create_df_from_folders(
+        images_folder=dataset_root / "images",
+        lms_folder=dataset_root / "lms",
+    )
     if len(df) == 0:
         raise ValueError(f"No image/label pairs found in {dataset_root}")
 

@@ -697,34 +697,6 @@ def find_matching_fn(
         return matching_target_fns
 
 
-@str_to_path(0)
-def create_df_from_folder(folder):
-    images_fldr = folder / ("images")
-    inds_fldr = folder/("indices")
-    lms_fldr = folder / ("lms")
-    if inds_fldr.exists()==False:
-        add_inds = False
-    else:
-        add_inds = True
-
-    image_fns = list(images_fldr.glob("*"))
-    lm_fns = list(lms_fldr.glob("*"))
-    dicis = []
-    for img_fn in image_fns:
-        case_id = info_from_filename(img_fn.name, full_caseid=True)["case_id"]
-        lm_fn = find_matching_fn(img_fn, lm_fns, tags=["case_id"])[0]
-        dici = {"image": img_fn, "lm": lm_fn, "case_id": case_id}
-
-        ind_fn  = inds_fldr/lm_fn.name
-        if add_inds==True :
-            dici.update({"indices": ind_fn})
-            if not ind_fn.exists():
-                raise MatchError("No matching indices file found for {0}".format(lm_fn))
-        dicis.append(dici)
-    df = pd.DataFrame(dicis)
-    return df
-
-
 def get_fileslist_from_path(path: Path, ext: str = ".pt"):
     return list(path.glob("*" + ext))
 
