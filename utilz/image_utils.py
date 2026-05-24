@@ -191,7 +191,7 @@ def retrieve_properties_from_nii(case):
 # %%
 if __name__ == "__main__":
     pass
-#     fldr = Path("/s/fran_storage/datasets/preprocessed/fixed_spacing/lidc2/spc_080_080_150/")
+#     fldr = Path("/t/fran_storage/datasets/preprocessed/fixed_spacing/lidc2/spc_080_080_150/")
 #     imgs_fldr = fldr/("images")
 #     lms_fldr = fldr/("lms")
 #     imgs= list(imgs_fldr.glob("*.*"))
@@ -239,7 +239,7 @@ if __name__ == "__main__":
 #     ret = blend_images(image=data["image"][0], label=data["label"][0], alpha=0.5, cmap="hsv", rescale_arrays=False)
 #     ret = ret.unsqueeze(0)
 # # %%
-#     tb_dir ="/s/fran_storage/tensorboard/"
+#     tb_dir ="/t/fran_storage/tensorboard/"
 #     im = img.unsqueeze(0).unsqueeze(0)
 #     plot_2d_or_3d_image(data=ret, writer=SummaryWriter(log_dir=tb_dir), frame_dim=-1,step=0)
 #     plot_2d_or_3d_image(data=im, step=0, writer=SummaryWriter(log_dir=tb_dir), frame_dim=-1)
