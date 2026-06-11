@@ -38,6 +38,8 @@ import matplotlib.pyplot as plt
 plt.ion()
 
 __all__ = [
+    "ImageBBoxViewer",
+    "ImageMaskBboxViewer",
     "ImageMaskViewer",
     "discrete_cmap",
     "fix_labels",
@@ -52,6 +54,30 @@ __all__ = [
 IMAGE_DTYPES = {"i", "img", "image"}
 MASK_DTYPES = {"m", "mask", "label", "lm", "labelimage"}
 DISPLAY_ORIENTATION = "LPS"
+ORIENTATION_SPECS = {
+    "xyz": {
+        "axial": {"slice_axis": 2, "rot_k": 1, "axis_name": "z"},
+        "coronal": {"slice_axis": 1, "rot_k": 1, "axis_name": "y"},
+        "sagittal": {"slice_axis": 0, "rot_k": 1, "axis_name": "x"},
+        "sag": {"slice_axis": 0, "rot_k": 1, "axis_name": "x"},
+    },
+    "zyx": {
+        "axial": {"slice_axis": 0, "rot_k": 1, "axis_name": "z"},
+        "coronal": {"slice_axis": 1, "rot_k": 1, "axis_name": "y"},
+        "sagittal": {"slice_axis": 2, "rot_k": 1, "axis_name": "x"},
+        "sag": {"slice_axis": 2, "rot_k": 1, "axis_name": "x"},
+    },
+}
+BBOX_COLORS = [
+    "#e41a1c",
+    "#377eb8",
+    "#4daf4a",
+    "#984ea3",
+    "#ff7f00",
+    "#a65628",
+    "#f781bf",
+    "#999999",
+]
 
 
 def discrete_cmap(n_bins, base_cmap=None):
@@ -115,18 +141,7 @@ def _oriented_tensor_array(image):
     return _oriented_sitk_array(sitk_image)
 
 
-def _to_numpy_array(image):
-    if isinstance(image, (str, Path)):
-        image = _load_path(Path(image))
-    if isinstance(image, sitk.Image):
-        image = _oriented_sitk_array(image)
-    elif isinstance(image, torch.Tensor) and _tensor_has_affine_meta(image):
-        image = _oriented_tensor_array(image)
-    elif isinstance(image, torch.Tensor):
-        image = image.detach().cpu().numpy()
-    elif not isinstance(image, np.ndarray):
-        raise TypeError(f"Unsupported image input type: {type(image)}")
-
+def _squeeze_volume(image):
     while image.ndim > 3:
         image = image[0]
     if image.ndim == 2:
@@ -136,12 +151,227 @@ def _to_numpy_array(image):
     return image
 
 
+def _resolve_orientation(orientation, coord_order):
+    orient_key = orientation.lower()
+    if orient_key == "sag":
+        orient_key = "sagittal"
+    if coord_order == "auto":
+        raise ValueError("coord_order='auto' must be resolved before calling _resolve_orientation")
+    if coord_order not in ORIENTATION_SPECS:
+        raise ValueError(f"Unsupported coord_order: {coord_order}")
+    if orient_key not in ORIENTATION_SPECS[coord_order]:
+        raise ValueError(
+            f"Unsupported orientation {orientation!r}; "
+            f"expected one of {list(ORIENTATION_SPECS[coord_order])}"
+        )
+    return ORIENTATION_SPECS[coord_order][orient_key]
+
+
+def _make_view_state(orientation, coord_order, apply_transpose=True):
+    view_spec = _resolve_orientation(orientation, coord_order)
+    rot_k = view_spec["rot_k"] if apply_transpose else 0
+    return view_spec, view_spec["slice_axis"], rot_k
+
+
+def _volume_slice(volume, slice_axis, slice_idx):
+    if slice_axis == 0:
+        return volume[slice_idx]
+    if slice_axis == 1:
+        return volume[:, slice_idx]
+    return volume[:, :, slice_idx]
+
+
+def _display_slice(volume, slice_axis, slice_idx, rot_k):
+    sl = _volume_slice(volume, slice_axis, slice_idx)
+    if rot_k % 4:
+        sl = np.rot90(sl, k=rot_k % 4)
+    return sl
+
+
+def _load_oriented_volume(image):
+    if isinstance(image, (str, Path)):
+        image = _load_path(Path(image))
+    if isinstance(image, sitk.Image):
+        return _oriented_sitk_array(image), "zyx"
+    if isinstance(image, torch.Tensor) and _tensor_has_affine_meta(image):
+        return _oriented_tensor_array(image), "zyx"
+    if isinstance(image, torch.Tensor):
+        image = image.detach().cpu().numpy()
+        if image.dtype == np.float16:
+            image = image.astype(np.float32)
+        return _squeeze_volume(image), "xyz"
+    if isinstance(image, np.ndarray):
+        return _squeeze_volume(image), "xyz"
+    raise TypeError(f"Unsupported image input type: {type(image)}")
+
+
+def _load_raw_volume(image):
+    if isinstance(image, (str, Path)):
+        image = _load_path(Path(image))
+    if isinstance(image, sitk.Image):
+        image = sitk.GetArrayFromImage(fix_labels(image))
+    elif isinstance(image, torch.Tensor):
+        image = image.detach().cpu().numpy()
+        if image.dtype == np.float16:
+            image = image.astype(np.float32)
+    elif not isinstance(image, np.ndarray):
+        raise TypeError(f"Unsupported image input type: {type(image)}")
+    return _squeeze_volume(image)
+
+
+def _tensor_meta_dict(image):
+    if isinstance(image, torch.Tensor) and hasattr(image, "meta") and image.meta is not None:
+        return dict(image.meta)
+    return {}
+
+
+def _normalize_boxes(bbox):
+    if isinstance(bbox, torch.Tensor):
+        boxes = bbox.detach().cpu().numpy()
+    else:
+        boxes = np.asarray(bbox, dtype=np.float64)
+    if boxes.ndim == 1:
+        boxes = boxes[None]
+    if boxes.ndim != 2 or boxes.shape[1] != 6:
+        raise ValueError(f"Expected bbox shape (N, 6) xyzxyz, got {boxes.shape}")
+    return boxes
+
+
+def _bbox_colors(n_boxes):
+    if n_boxes == 1:
+        return [BBOX_COLORS[0]]
+    return [BBOX_COLORS[i % len(BBOX_COLORS)] for i in range(n_boxes)]
+
+
+def _box_visible(box, slice_axis, slice_idx):
+    x0, y0, z0, x1, y1, z1 = box
+    if slice_axis == 0:
+        return x0 <= slice_idx <= x1
+    if slice_axis == 1:
+        return y0 <= slice_idx <= y1
+    return z0 <= slice_idx <= z1
+
+
+def _box_index_ranges(box):
+    x0, y0, z0, x1, y1, z1 = box
+    return (
+        int(np.floor(x0)),
+        int(np.floor(x1)),
+        int(np.floor(y0)),
+        int(np.floor(y1)),
+        int(np.floor(z0)),
+        int(np.floor(z1)),
+    )
+
+
+def _box_slice_mask(shape_2d, box, slice_axis):
+    x_lo, x_hi, y_lo, y_hi, z_lo, z_hi = _box_index_ranges(box)
+    mask = np.zeros(shape_2d, dtype=bool)
+    if slice_axis == 0:
+        mask[y_lo : y_hi + 1, z_lo : z_hi + 1] = True
+    elif slice_axis == 1:
+        mask[x_lo : x_hi + 1, z_lo : z_hi + 1] = True
+    else:
+        mask[x_lo : x_hi + 1, y_lo : y_hi + 1] = True
+    return mask
+
+
+def _box_display_edges(box, volume, slice_axis, slice_idx, rot_k):
+    if not _box_visible(box, slice_axis, slice_idx):
+        return None
+    sl = _volume_slice(volume, slice_axis, slice_idx)
+    mask = _box_slice_mask(sl.shape, box, slice_axis)
+    if rot_k % 4:
+        mask = np.rot90(mask, k=rot_k % 4)
+    ys, xs = np.where(mask)
+    if ys.size == 0:
+        return None
+    return ys.min(), ys.max(), xs.min(), xs.max()
+
+
+def _box_span(box, slice_axis):
+    x0, y0, z0, x1, y1, z1 = box
+    if slice_axis == 0:
+        return x0, x1
+    if slice_axis == 1:
+        return y0, y1
+    return z0, z1
+
+
+def _draw_box(ax, box, color, line_style, linewidth, volume, slice_axis, slice_idx, rot_k):
+    edges = _box_display_edges(box, volume, slice_axis, slice_idx, rot_k)
+    if edges is None:
+        return []
+    r0, r1, c0, c1 = edges
+    segments = [
+        ([c0, c1], [r0, r0]),
+        ([c0, c1], [r1, r1]),
+        ([c0, c0], [r0, r1]),
+        ([c1, c1], [r0, r1]),
+    ]
+    lines = []
+    for xs, ys in segments:
+        line, = ax.plot(xs, ys, color=color, linestyle=line_style, linewidth=linewidth)
+        lines.append(line)
+    return lines
+
+
+def _box_summary_lines(box, index, color, slice_idx, slice_axis, axis_name):
+    x0, y0, z0, x1, y1, z1 = box
+    center = (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2
+    size = x1 - x0, y1 - y0, z1 - z0
+    span_lo, span_hi = _box_span(box, slice_axis)
+    visible = _box_visible(box, slice_axis, slice_idx)
+    state = "ON" if visible else "off"
+    return [
+        f"[{index}] {color}  {state}",
+        f"  xyz=({x0:g},{y0:g},{z0:g})-({x1:g},{y1:g},{z1:g})",
+        f"  size=({size[0]:g},{size[1]:g},{size[2]:g})",
+        f"  ctr=({center[0]:g},{center[1]:g},{center[2]:g})",
+        f"  {axis_name} span [{span_lo:g}, {span_hi:g}]",
+    ]
+
+
+def _image_info_lines(image_array, meta, slice_idx, orientation, coord_order, view_spec):
+    n_slices = image_array.shape[view_spec["slice_axis"]] - 1
+    lines = [
+        "image",
+        f"  shape: {tuple(image_array.shape)}",
+        f"  view: {orientation} ({coord_order})",
+    ]
+    if "spacing" in meta:
+        lines.append(f"  spacing: {np.asarray(meta['spacing']).tolist()}")
+    if "spatial_shape" in meta:
+        lines.append(f"  spatial_shape: {np.asarray(meta['spatial_shape']).tolist()}")
+    if "space" in meta:
+        lines.append(f"  space: {meta['space']}")
+    if "filename_or_obj" in meta:
+        lines.append(f"  file: {meta['filename_or_obj']}")
+    if "src_filename" in meta:
+        lines.append(f"  src: {meta['src_filename']}")
+    lines.append("")
+    lines.append(
+        f"slice {slice_idx} / {n_slices}  "
+        f"({view_spec['axis_name']}, axis {view_spec['slice_axis']})"
+    )
+    return lines
+
+
+def _image_wl_limits(image, intensity_slider_range_percentile):
+    limits = np.percentile(image.reshape(-1), intensity_slider_range_percentile)
+    return limits[0], limits[1]
+
+
+def _to_numpy_array(image):
+    return _load_oriented_volume(image)[0]
+
+
 def get_window_level_numpy_array(
     image_list,
     intensity_slider_range_percentile=(2, 98),
     data_types=("img", "mask"),
 ):
-    npa_list = [_to_numpy_array(image) for image in image_list]
+    npa_list = [_load_oriented_volume(image)[0] for image in image_list]
     dtypes = _normalize_dtypes(data_types, len(npa_list))
     wl_range = []
     wl_init = []
@@ -190,7 +420,91 @@ def viewer(*arrays):
     return ImageMaskViewer(list(arrays), dtypes=dtypes)
 
 
-class ImageMaskViewer:
+class _SliceViewerBase:
+    def _init_bbox_state(self, bbox, line_style, linewidth):
+        self.boxes = _normalize_boxes(bbox) if bbox is not None else None
+        self.colors = _bbox_colors(len(self.boxes)) if self.boxes is not None else []
+        self.line_style = line_style
+        self.linewidth = linewidth
+        self.box_lines_by_ax = {}
+
+    def _attach_slice_slider(self, fig, rect, volume_shape, on_change):
+        slider = Slider(
+            ax=fig.add_axes(rect),
+            label="slice",
+            valmin=0,
+            valmax=volume_shape[self.slice_axis] - 1,
+            valinit=0,
+            valstep=1,
+        )
+        slider.drawon = False
+        slider.on_changed(on_change)
+        return slider
+
+    def _attach_wl_slider(self, fig, rect, wl_range, wl_init, on_change):
+        slider = RangeSlider(
+            ax=fig.add_axes(rect),
+            label="Window level",
+            valmin=wl_range[0],
+            valmax=wl_range[1],
+            valinit=wl_init,
+        )
+        slider.drawon = False
+        slider.on_changed(on_change)
+        return slider
+
+    def _imshow_slice(self, ax, volume, slice_idx, cmap, vmin, vmax):
+        return ax.imshow(
+            _display_slice(volume, self.slice_axis, slice_idx, self.rot_k),
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+        )
+
+    def _clear_ax_boxes(self, ax):
+        for line in self.box_lines_by_ax.get(ax, []):
+            line.remove()
+        self.box_lines_by_ax[ax] = []
+
+    def _draw_boxes_on_ax(self, ax, volume, slice_idx):
+        self._clear_ax_boxes(ax)
+        if self.boxes is None:
+            return
+        lines = []
+        for box, color in zip(self.boxes, self.colors):
+            lines.extend(
+                _draw_box(
+                    ax,
+                    box,
+                    color,
+                    self.line_style,
+                    self.linewidth,
+                    volume,
+                    self.slice_axis,
+                    slice_idx,
+                    self.rot_k,
+                )
+            )
+        self.box_lines_by_ax[ax] = lines
+
+    def _bbox_info_lines(self, slice_idx):
+        lines = [f"boxes ({len(self.boxes)})"]
+        for index, (box, color) in enumerate(zip(self.boxes, self.colors)):
+            lines.extend(
+                _box_summary_lines(
+                    box,
+                    index,
+                    color,
+                    slice_idx,
+                    self.slice_axis,
+                    self.view_spec["axis_name"],
+                )
+            )
+            lines.append("")
+        return lines
+
+
+class ImageMaskViewer(_SliceViewerBase):
     def __init__(
         self,
         image_list,
@@ -201,10 +515,12 @@ class ImageMaskViewer:
         cmap_img="Greys_r",
         cmap_mask=None,
         apply_transpose=True,
+        orientation="axial",
+        coord_order="auto",
     ):
         self.cmap_img = cmap_img
         self.cmap_mask = cmap_mask or "nipy_spectral"
-        self.apply_transpose = apply_transpose
+        self.orientation = orientation
         dtypes = data_types or dtypes
         self.npa_list, self.wl_range, self.wl_init = get_window_level_numpy_array(
             image_list,
@@ -212,61 +528,184 @@ class ImageMaskViewer:
             data_types=dtypes,
         )
         self.dtypes = _normalize_dtypes(dtypes, len(self.npa_list))
+        coord_orders = [_load_oriented_volume(image)[1] for image in image_list]
+        self.coord_order = coord_orders[0] if coord_order == "auto" else coord_order
+        self.view_spec, self.slice_axis, self.rot_k = _make_view_state(
+            orientation, self.coord_order, apply_transpose
+        )
+        self._init_bbox_state(None, "solid", 1.5)
         self.fig, self.axises = _figure_axes(len(self.npa_list), figure_size)
-        self.axamp = plt.axes([0.1, 0.05, 0.8, 0.03])
-        self.axamp_wl = plt.axes([0.1, 0.0, 0.8, 0.03])
-        self.slider = Slider(
-            ax=self.axamp,
-            label="slice",
-            valmin=0,
-            valmax=self.npa_list[0].shape[0] - 1,
-            valinit=0,
-            valstep=1,
+        self.slider = self._attach_slice_slider(
+            self.fig, [0.1, 0.05, 0.8, 0.03], self.npa_list[0].shape, self.update_slice
         )
-        self.slider_wl = RangeSlider(
-            ax=self.axamp_wl,
-            label="Window level",
-            valmin=self.wl_range[0][0],
-            valmax=self.wl_range[0][1],
-            valinit=self.wl_init[0],
+        self.slider_wl = self._attach_wl_slider(
+            self.fig, [0.1, 0.0, 0.8, 0.03], self.wl_range[0], self.wl_init[0], self.update_window_level
         )
-        self.slider.drawon = False
-        self.slider_wl.drawon = False
         self.ax_imgs = self.create_images()
-        self.slider.on_changed(self.update_fig_fast)
-        self.slider_wl.on_changed(self.update_window_level)
         self.fig.subplots_adjust(bottom=0.14)
         _show_figure()
 
     def create_images(self):
         ax_imgs = []
         for axis, image, dtype in zip(self.axises, self.npa_list, self.dtypes):
-            image_slice = image[0]
             if dtype == "mask":
-                ax_img = axis.imshow(
-                    image_slice,
-                    cmap=self.cmap_mask,
-                    vmin=image.min(),
-                    vmax=image.max(),
-                )
+                ax_img = self._imshow_slice(axis, image, 0, self.cmap_mask, image.min(), image.max())
             else:
-                ax_img = axis.imshow(
-                    image_slice,
-                    cmap=self.cmap_img,
-                    vmin=self.slider_wl.val[0],
-                    vmax=self.slider_wl.val[1],
+                ax_img = self._imshow_slice(
+                    axis, image, 0, self.cmap_img, self.slider_wl.val[0], self.slider_wl.val[1]
                 )
             ax_imgs.append(ax_img)
         return ax_imgs
 
-    def update_fig_fast(self, value):
+    def update_slice(self, value):
         index = int(round(value))
         for ax_img, image in zip(self.ax_imgs, self.npa_list):
-            ax_img.set_array(image[index])
+            ax_img.set_array(_display_slice(image, self.slice_axis, index, self.rot_k))
         self.fig.canvas.draw_idle()
 
     def update_window_level(self, values):
         for ax_img, dtype in zip(self.ax_imgs, self.dtypes):
             if dtype == "image":
                 ax_img.set_clim(*values)
+        self.fig.canvas.draw_idle()
+
+
+class ImageBBoxViewer(_SliceViewerBase):
+    def __init__(
+        self,
+        image,
+        bbox,
+        figure_size=(12, 8),
+        intensity_slider_range_percentile=(2, 98),
+        cmap_img="Greys_r",
+        line_style="solid",
+        linewidth=1.5,
+        orientation="axial",
+        coord_order="xyz",
+    ):
+        self.image_input = image
+        self.meta = _tensor_meta_dict(image)
+        self.image = _load_raw_volume(image)
+        self.orientation = orientation
+        self.coord_order = coord_order
+        self.view_spec, self.slice_axis, self.rot_k = _make_view_state(orientation, coord_order)
+        self.cmap_img = cmap_img
+        self._init_bbox_state(bbox, line_style, linewidth)
+        wl_lo, wl_hi = _image_wl_limits(self.image, intensity_slider_range_percentile)
+        self.wl_range = (wl_lo, wl_hi)
+        self.wl_init = (wl_lo, wl_hi)
+
+        self.fig = plt.figure(figsize=figure_size)
+        self.ax_img = self.fig.add_axes([0.06, 0.15, 0.62, 0.80])
+        self.ax_info = self.fig.add_axes([0.70, 0.15, 0.28, 0.80])
+        self.ax_info.axis("off")
+        self.slider = self._attach_slice_slider(
+            self.fig, [0.06, 0.05, 0.62, 0.03], self.image.shape, self.update_slice
+        )
+        self.slider_wl = self._attach_wl_slider(
+            self.fig, [0.06, 0.0, 0.62, 0.03], self.wl_range, self.wl_init, self.update_window_level
+        )
+        self.ax_im = self._imshow_slice(
+            self.ax_img, self.image, 0, self.cmap_img, self.slider_wl.val[0], self.slider_wl.val[1]
+        )
+        self.info_text = self.ax_info.text(
+            0.0, 1.0, "", transform=self.ax_info.transAxes,
+            va="top", ha="left", fontsize=9, family="monospace",
+        )
+        self.update_slice(0)
+        _show_figure()
+
+    def _update_info(self, slice_idx):
+        lines = _image_info_lines(
+            self.image, self.meta, slice_idx, self.orientation, self.coord_order, self.view_spec
+        )
+        lines.append("")
+        lines.extend(self._bbox_info_lines(slice_idx))
+        self.info_text.set_text("\n".join(lines).rstrip())
+
+    def update_slice(self, value):
+        slice_idx = int(round(value))
+        self.ax_im.set_array(_display_slice(self.image, self.slice_axis, slice_idx, self.rot_k))
+        self._draw_boxes_on_ax(self.ax_img, self.image, slice_idx)
+        self._update_info(slice_idx)
+        self.fig.canvas.draw_idle()
+
+    def update_window_level(self, values):
+        self.ax_im.set_clim(*values)
+        self.fig.canvas.draw_idle()
+
+
+class ImageMaskBboxViewer(_SliceViewerBase):
+    def __init__(
+        self,
+        image,
+        mask,
+        bbox,
+        dtypes="im",
+        figure_size=(14, 8),
+        intensity_slider_range_percentile=(2, 98),
+        cmap_img="Greys_r",
+        cmap_mask=None,
+        orientation="axial",
+        coord_order="xyz",
+        line_style="solid",
+        linewidth=1.5,
+    ):
+        self.image_input = image
+        self.meta = _tensor_meta_dict(image)
+        self.image = _load_raw_volume(image)
+        self.mask = _load_raw_volume(mask)
+        self.orientation = orientation
+        self.coord_order = coord_order
+        self.view_spec, self.slice_axis, self.rot_k = _make_view_state(orientation, coord_order)
+        self.cmap_img = cmap_img
+        self.cmap_mask = cmap_mask or "nipy_spectral"
+        self._init_bbox_state(bbox, line_style, linewidth)
+        wl_lo, wl_hi = _image_wl_limits(self.image, intensity_slider_range_percentile)
+        self.wl_range = (wl_lo, wl_hi)
+        self.wl_init = (wl_lo, wl_hi)
+
+        self.fig = plt.figure(figsize=figure_size)
+        self.ax_img = self.fig.add_axes([0.04, 0.15, 0.28, 0.80])
+        self.ax_mask = self.fig.add_axes([0.34, 0.15, 0.28, 0.80])
+        self.ax_info = self.fig.add_axes([0.70, 0.15, 0.28, 0.80])
+        self.ax_info.axis("off")
+        self.slider = self._attach_slice_slider(
+            self.fig, [0.04, 0.05, 0.58, 0.03], self.image.shape, self.update_slice
+        )
+        self.slider_wl = self._attach_wl_slider(
+            self.fig, [0.04, 0.0, 0.58, 0.03], self.wl_range, self.wl_init, self.update_window_level
+        )
+        self.ax_im = self._imshow_slice(
+            self.ax_img, self.image, 0, self.cmap_img, self.slider_wl.val[0], self.slider_wl.val[1]
+        )
+        self.ax_m = self._imshow_slice(
+            self.ax_mask, self.mask, 0, self.cmap_mask, self.mask.min(), self.mask.max()
+        )
+        self.info_text = self.ax_info.text(
+            0.0, 1.0, "", transform=self.ax_info.transAxes,
+            va="top", ha="left", fontsize=9, family="monospace",
+        )
+        self.update_slice(0)
+        _show_figure()
+
+    def _update_info(self, slice_idx):
+        lines = _image_info_lines(
+            self.image, self.meta, slice_idx, self.orientation, self.coord_order, self.view_spec
+        )
+        lines.append("")
+        lines.extend(self._bbox_info_lines(slice_idx))
+        self.info_text.set_text("\n".join(lines).rstrip())
+
+    def update_slice(self, value):
+        slice_idx = int(round(value))
+        self.ax_im.set_array(_display_slice(self.image, self.slice_axis, slice_idx, self.rot_k))
+        self.ax_m.set_array(_display_slice(self.mask, self.slice_axis, slice_idx, self.rot_k))
+        self._draw_boxes_on_ax(self.ax_img, self.image, slice_idx)
+        self._draw_boxes_on_ax(self.ax_mask, self.image, slice_idx)
+        self._update_info(slice_idx)
+        self.fig.canvas.draw_idle()
+
+    def update_window_level(self, values):
+        self.ax_im.set_clim(*values)
         self.fig.canvas.draw_idle()
