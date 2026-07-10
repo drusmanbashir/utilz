@@ -652,6 +652,7 @@ def find_matching_fn(
     target_fns: Union[list, Path],
     tags: list = ["case_id"],
     allow_multiple_matches=False,
+    exclude_patterns: list = [],
 ) -> list:
     assert set(tags).issubset(CASEID_TAGS), (
         "Allowed tags are {0}. \n You gave {1}".format(CASEID_TAGS, tags)
@@ -681,6 +682,13 @@ def find_matching_fn(
                 for k in tags_src.keys() & tags_target.keys()
             ):
                 matching_target_fns.append(target_fn)
+
+    if exclude_patterns:
+        matching_target_fns = [
+            fn
+            for fn in matching_target_fns
+            if not any(pattern in str(fn) for pattern in exclude_patterns)
+        ]
 
     if len(matching_target_fns) > 1 and allow_multiple_matches == False:
         raise MatchError(

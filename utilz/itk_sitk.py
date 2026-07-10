@@ -37,8 +37,12 @@ def _as_numpy(x):
     if hasattr(x, "cpu"):
         x = x.cpu()
     if hasattr(x, "numpy"):
-        return x.numpy()
-    return np.asarray(x)
+        arr = x.numpy()
+    else:
+        arr = np.asarray(x)
+    if arr.dtype == np.float16:
+        arr = arr.astype(np.float32)
+    return arr
 
 
 def _extract_tensor_and_meta(obj):

@@ -223,7 +223,7 @@ def _read_volume(path: Path, slice_axis: int | None, is_label: bool) -> np.ndarr
 
     if path.suffix == ".pt":
         import torch
-        from monai.data.meta_tensor import MetaTensor
+        from det3d.monai.data.meta_tensor import MetaTensor
         from torch.serialization import add_safe_globals
 
         add_safe_globals([MetaTensor])
