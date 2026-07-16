@@ -392,6 +392,8 @@ def multiprocess_multiarg(
     io=None,  # True -> use I/O config (1 thread/proc)
     algebra=None,  # True -> use numeric config (few threads/proc)
     logname="/tmp/log.log",
+    mem_threshold=0.85,
+    log_dir=None,
 ):
     """
     Calls func(*args) for each args in 'arguments' (iterable of tuples).
@@ -401,16 +403,17 @@ def multiprocess_multiarg(
       - algebra=True  : balanced: N processes, M threads each (numeric heavy)
       - default       : no special thread limiting
 
+    Mem-aware (default): adaptive spawn/kill/requeue via utilz.multiproc.
+      - mem_threshold: used-RAM fraction that triggers shrink (default 0.85)
+      - log_dir: folder for log.jsonl (default under /tmp/utilz_multiproc_logs/)
+
     Notes:
       - If both io and algebra are None/False, no thread caps are applied.
       - If num_processes<=0/None, we auto-size from available CPUs (leave 1 for parent).
     """
-    # choose a progress bar adapter
+    from utilz.multiproc.supervisor import run_adaptive
 
-    if progress_bar:
-        pbar_fn = tqdm
-    else:
-        pbar_fn = lambda x: x
+    arguments = list(arguments)
 
     # size the pool
     if not num_processes or num_processes < 1:
@@ -430,6 +433,10 @@ def multiprocess_multiarg(
 
     # single-process or debug path
     if (not multiprocess) or debug or num_processes == 1:
+        if progress_bar:
+            pbar_fn = tqdm
+        else:
+            pbar_fn = lambda x: x
         if io:
             _limit_threads_for_io()
         elif algebra:
@@ -443,13 +450,9 @@ def multiprocess_multiarg(
             results.append(func(*res))
         return results
 
-    # multiprocessing path
-    ctx = mp.get_context("spawn")  # safer on HPC than fork
-    results = []
-
     # choose initializer for workers
     initializer = None
-    initargs = None
+    initargs = ()
     if io:
         initializer = _limit_threads_for_io
         initargs = tuple()
@@ -460,22 +463,16 @@ def multiprocess_multiarg(
         initializer = partial(_limit_threads_for_numeric, per_proc_threads)
         initargs = tuple()
 
-    try:
-        with ctx.Pool(
-            processes=num_processes, initializer=initializer, initargs=initargs or ()
-        ) as p:
-            jobs = [
-                p.apply_async(func=func, args=tuple(argument)) for argument in arguments
-            ]
-            for j in pbar_fn(jobs):
-                results.append(j.get())  # re-raises child exceptions here
-    except KeyboardInterrupt:
-        try:
-            p.terminate()
-        except Exception:
-            pass
-        raise
-    return results
+    return run_adaptive(
+        func,
+        arguments,
+        num_processes=num_processes,
+        mem_threshold=mem_threshold,
+        log_dir=log_dir,
+        initializer=initializer,
+        initargs=initargs,
+        progress_bar=progress_bar,
+    )
 
 
 def get_available_device(max_memory=0.8) -> int:
