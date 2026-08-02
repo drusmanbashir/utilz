@@ -314,7 +314,6 @@ def _limit_threads_for_io():
     os.environ.setdefault("MALLOC_ARENA_MAX", "2")
     try:
         import torch
-
         torch.set_num_threads(1)
         torch.set_num_interop_threads(1)
     except Exception:
