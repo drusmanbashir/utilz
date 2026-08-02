@@ -13,7 +13,6 @@ from typing import Optional, Tuple, Union
 import ipdb
 import numpy as np
 import pandas as pd
-import torch
 from ipdb.__main__ import get_ipython
 from tqdm.auto import tqdm
 
@@ -184,6 +183,7 @@ def merge_dicts(d1, d2):
 
 
 def maybe_to_torch(d):
+    import torch
     if isinstance(d, list):
         d = [maybe_to_torch(i) if not isinstance(i, torch.Tensor) else i for i in d]
     elif not isinstance(d, torch.Tensor):
