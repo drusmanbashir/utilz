@@ -277,7 +277,8 @@ def str_to_list_int(input):
     return int(input)
 
 
-def purge_cuda(learn):
+def purge_cuda():
+    import torch
     gc.collect()
     torch.cuda.empty_cache()
 
@@ -501,6 +502,8 @@ def get_available_device(max_memory=0.8) -> int:
 
 
 def resolve_device(device):
+    import torch
+
     try:
         device = torch.device(device)
     except:
@@ -519,6 +522,8 @@ def resolve_device(device):
 
 
 def set_cuda_device(device_id=None):
+    import torch
+
     if device_id == None:
         device_id = get_available_device()
     torch.cuda.set_device(device_id)

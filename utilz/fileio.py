@@ -1,4 +1,6 @@
 # %%
+from __future__ import annotations
+
 import collections
 import json
 import os
@@ -11,7 +13,6 @@ import ipdb
 import numpy as np
 import pandas as pd
 import SimpleITK as sitk
-import torch
 import tqdm
 import yaml
 from bs4 import BeautifulSoup as BS
@@ -196,6 +197,7 @@ def save_sitk(
     img: Union[torch.Tensor, np.ndarray, sitk.Image], output_filename, verbose=True
 ):
     """Save image using SimpleITK format."""
+    import torch
     if isinstance(img, torch.Tensor):
         img = img.cpu().detach().numpy()
     if not isinstance(img, sitk.Image):
@@ -316,6 +318,8 @@ def sitk_filename_to_numpy(fname):
 
 @str_to_path(0)
 def load_image(fn):
+
+    import torch
     """Load image from various formats (numpy, torch, nii)."""
     val_extensions = {
         "np": np.load,
