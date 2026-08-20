@@ -25,7 +25,15 @@ tr = ipdb.set_trace
 
 
 def regex_matcher(indx=0):
-    """Return decorator that regex-searches `(pattern, text)` output."""
+    """
+    Decorator that applies regex pattern matching to a function's output.
+
+    Args:
+        indx: Index of the regex match group to return (default: 0 for full match)
+
+    Returns:
+        Decorator function that extracts specified match group from regex search
+    """
 
     def _outer(func):
 
@@ -42,33 +50,40 @@ def regex_matcher(indx=0):
 
 @str_to_path()
 def is_sitk_file(fn: Path):
-    """Check for `.nii`/`.nrrd` files."""
-    return _has_any_extension(fn, (".nii", ".nrrd"))
+    """Check if file is a SimpleITK supported format (.nii, .nrrd)."""
+    if fn.is_dir():
+        return False
+    fn_name = fn.name
+    sitk_exts = ".nii", ".nrrd"
+    for ext in sitk_exts:
+        if ext in fn_name:
+            return True
+    return False
 
 
 @str_to_path()
 def is_img_file(fn: Path):
-    """Check for image-like files (`.nii`, `.nrrd`, `.pt`)."""
-    return _has_any_extension(fn, (".nii", ".nrrd", ".pt"))
-
-
-def _has_any_extension(fn: Path, exts: tuple[str, ...]) -> bool:
+    """Check if file is an image file (.nii, .nrrd, .pt)."""
     if fn.is_dir():
         return False
-    fn_name = fn.name.lower()
-    return any(ext in fn_name for ext in exts)
+    fn_name = fn.name
+    exts = ".nii", ".nrrd", ".pt"
+    for ext in exts:
+        if ext in fn_name:
+            return True
+    return False
 
 
 @patch_to(Path)
 def str_replace(self, str1, str2):
-    """Return path with substring replaced."""
+    """Replace string occurrences in path and return new Path object."""
     interm = str(self)
     interm = interm.replace(str1, str2)
     return self.__class__(interm)
 
 
 def convert_uint16_to_uint8(fname):
-    """Cast saved NumPy array to `uint8` when needed."""
+    """Convert uint16 numpy array to uint8 and save back to file."""
     x = np.load(fname)
     if x.dtype != np.uint8:
         np.save(fname, x.astype(np.uint8))
@@ -76,7 +91,7 @@ def convert_uint16_to_uint8(fname):
 
 
 def save_file_wrapper(fnc):
-    """Wrap saver with overwrite/mkdir handling."""
+    """Decorator to handle file saving with overwrite and directory creation options."""
 
     def _inner(object, filename, verbose=False, overwrite=True, makedir=True):
         if not isinstance(filename, Path):
@@ -97,7 +112,7 @@ def save_file_wrapper(fnc):
 
 @save_file_wrapper
 def save_np(object, filename):
-    """Save array with `np.save`."""
+    """Save numpy array to file using numpy's save function."""
     np.save(filename, object)
 
 
@@ -111,7 +126,7 @@ def save_np(object, filename):
 #
 #
 def load_file(*ar, **kwargs):
-    """Build loader decorator with `open()` args."""
+    """Decorator to handle file loading with different file modes."""
 
     def inner(func):
         def wrapper(filename):
@@ -126,25 +141,25 @@ def load_file(*ar, **kwargs):
 
 @load_file("r")
 def load_json(filename):
-    """Load JSON."""
+    """Load JSON file."""
     return json.load(filename)
 
 
 @load_file("rb")
 def load_pickle(filename):
-    """Load pickle."""
+    """Load pickle file."""
     return pickle.load(filename)
 
 
 @load_file("r")
 def load_yaml(filename):
-    """Load YAML."""
+    """Load YAML file."""
     output_dic_ = yaml.safe_load(filename)
     return output_dic_
 
 
 def load_text(filename):
-    """Load stripped lines from text."""
+    """Load text file as list of stripped lines."""
     with open(filename) as f:
         contents = f.readlines()
         contents = [a.strip() for a in contents]
@@ -153,18 +168,18 @@ def load_text(filename):
 
 @load_file("r")
 def load_xml(filename):
-    """Load XML with BeautifulSoup."""
+    """Load XML file using BeautifulSoup."""
     return BS(filename, "xml")
 
 
 def save_xml(itm, filename):
-    """Write XML text."""
+    """Save XML content to file."""
     with open(filename, "w") as f:
         f.write(itm)
 
 
 def save_json(dictionary, filename):
-    """Write JSON."""
+    """Save dictionary as JSON file."""
     with open(filename, "w") as f:
         json.dump(dictionary, f)
 
@@ -181,7 +196,7 @@ def delete_files(file_names):
 def save_sitk(
     img: Union[torch.Tensor, np.ndarray, sitk.Image], output_filename, verbose=True
 ):
-    """Save array/tensor/image via SimpleITK."""
+    """Save image using SimpleITK format."""
     import torch
     if isinstance(img, torch.Tensor):
         img = img.cpu().detach().numpy()
@@ -201,7 +216,7 @@ def save_sitk(
 
 
 def np_to_ni(input_filename, output_filename, overwrite=False):
-    """Convert `.npy` to NIfTI."""
+    """Convert numpy file to NIfTI format."""
     if not output_filename.exists() or overwrite == True:
         img = np.load(input_filename)
         print("Saving file {}".format(output_filename))
@@ -211,7 +226,7 @@ def np_to_ni(input_filename, output_filename, overwrite=False):
 
 
 def is_filename(x: str):
-    """Return True for bare filenames, not paths."""
+    """Check if string represents a filename (not a path)."""
     if not "/" in x:
         if "." in x:
             ext = x.split(".")[1]
@@ -227,7 +242,7 @@ def is_filename(x: str):
 
 
 def maybe_makedirs(x: Union[list, tuple, str, Path]):
-    """Create directories when missing."""
+    """Create directories if they don't exist."""
 
     def _inner(x):
         try:
@@ -240,21 +255,30 @@ def maybe_makedirs(x: Union[list, tuple, str, Path]):
             print(err.args)
             tr()
 
-    if isinstance(x, (list, tuple)):
+    if isinstance(x, list):
         [_inner(xx) for xx in x]
     else:
         _inner(x)
 
 
-def save_pickle(object, filename):
-    """Write pickle."""
-    with open(filename, "wb") as fout:
-        pickle.dump(object, fout)
+def dump(fnc, *args1):
+    """Generic dump decorator for file saving."""
+
+    def _inner(object, filename, *args2, **kwargs):
+        with open(filename, *args1, *args2, **kwargs) as fout:
+            fnc.dump(object, fout)
+
+    return _inner
+
+
+save_pickle = dump(pickle, "wb")
+save_json = dump(json, "w")
+# load_pickle = load(pickle)
 
 
 @str_to_path(0)
 def load_dict(filename):
-    """Load dict from JSON or pickle."""
+    """Load dictionary from JSON or pickle file automatically based on extension."""
 
     def _inner(filename, ext):
         if ext == "json":
@@ -274,7 +298,7 @@ def load_dict(filename):
 
 
 def save_dict(object, filename, sort=False):
-    """Save dict as JSON, fallback to pickle."""
+    """Save dictionary as JSON or pickle file, trying JSON first."""
     filename = str(filename).split(".")[0]
     try:
         if sort == True:
@@ -286,7 +310,7 @@ def save_dict(object, filename, sort=False):
 
 
 def sitk_filename_to_numpy(fname):
-    """Read SimpleITK image into NumPy."""
+    """Convert SimpleITK image file to numpy array."""
     arr = sitk.ReadImage(str(fname))
     arr = sitk.GetArrayFromImage(arr)
     return arr
@@ -319,7 +343,7 @@ def rename_and_move_images_and_masks(
     overwrite=False,
     log=True,
 ):
-    """Rename and move image/mask files into dataset folders."""
+    """Rename and organize image and mask files into structured folders."""
 
     def _to_sitk(im, subfolder, output_filename):
         output_filename_full = subfolder / output_filename
@@ -369,7 +393,7 @@ def rename_and_move_images_and_masks(
 
 
 def save_list(listi, filename: Path):
-    """Write nested list to text recursively."""
+    """Save nested list structure to file with recursive formatting."""
 
     def write(item):
         f.write(str(item) + "\n")

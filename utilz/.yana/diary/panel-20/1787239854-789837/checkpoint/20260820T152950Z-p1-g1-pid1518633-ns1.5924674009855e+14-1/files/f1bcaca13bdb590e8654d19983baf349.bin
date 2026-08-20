@@ -42,6 +42,7 @@ def regex_matcher(indx=0):
 
 @str_to_path()
 def is_sitk_file(fn: Path):
+
     """Check for `.nii`/`.nrrd` files."""
     return _has_any_extension(fn, (".nii", ".nrrd"))
 

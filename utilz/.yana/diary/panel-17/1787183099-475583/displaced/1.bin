@@ -1,13 +1,3 @@
-"""Align LMS NIfTI metadata to matching image volumes and record deltas.
-
-For each case with paired files in images/ and lms/, compare spacing, origin,
-and direction. When metadata is within tolerance, copy the LMS unchanged;
-otherwise rewrite the LMS header to match the image and write to out_subdir.
-Per-case metadata deltas are written to a CSV.
-
-CLI entry: python -m utilz.align_images_lms DATASET_ROOT (see argparse in __main__).
-"""
-
 import argparse
 import shutil
 from pathlib import Path
@@ -20,19 +10,16 @@ from utilz.helpers import is_close, multiprocess_multiarg
 
 
 def _vec3_delta(a, b):
-    """Return element-wise float differences for two 3-vectors."""
     return [float(x - y) for x, y in zip(a, b)]
 
 
 def _direction_delta(a, b):
-    """Return flattened element-wise differences for two 3x3 direction matrices."""
     da = np.array(a, dtype=float).reshape(3, 3)
     db = np.array(b, dtype=float).reshape(3, 3)
     return (da - db).reshape(-1).tolist()
 
 
 def _meta_row(case_id, img, lm, within_tol, aligned):
-    """Build one CSV row with image/LMS metadata and their deltas."""
     img_spacing = img.GetSpacing()
     lm_spacing = lm.GetSpacing()
     img_origin = img.GetOrigin()
@@ -73,7 +60,6 @@ def _meta_row(case_id, img, lm, within_tol, aligned):
 
 
 def _align_case(img_fn, lm_fn, out_fn, tol):
-    """Copy or rewrite one LMS to match image metadata; return its CSV row."""
     img = sitk.ReadImage(str(img_fn))
     lm = sitk.ReadImage(str(lm_fn))
 
@@ -108,10 +94,6 @@ def align_images_lms(
     csv_name="lms_metadata_deltas.csv",
     num_processes=16,
 ):
-    """Batch-align paired LMS NIfTIs under dataset_root and write delta CSV.
-
-    Returns a summary dict with case counts, output paths, and missing file lists.
-    """
     root = Path(dataset_root)
     images_dir = root / images_subdir
     lms_dir = root / lms_subdir
@@ -146,7 +128,6 @@ def align_images_lms(
 
 
 def main(args):
-    """Run align_images_lms from parsed CLI args and print summary."""
     summary = align_images_lms(
         args.dataset_root,
         tol=args.tol,
