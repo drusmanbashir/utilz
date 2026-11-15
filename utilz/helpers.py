@@ -5,6 +5,8 @@ import multiprocessing as mp
 import os
 import pprint
 import re
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures.process import BrokenProcessPool
 from functools import partial, wraps
 from pathlib import Path
 from time import time
@@ -382,6 +384,12 @@ def _limit_threads_for_numeric(
     return workers, per_proc_threads
 
 
+def _initialize_process_worker(initializer, initargs):  #AI
+    Path("/proc/self/oom_score_adj").write_text("1000")
+    if initializer is not None:
+        initializer(*initargs)
+
+
 def multiprocess_multiarg(
     func,
     arguments,
@@ -392,8 +400,6 @@ def multiprocess_multiarg(
     io=None,  # True -> use I/O config (1 thread/proc)
     algebra=None,  # True -> use numeric config (few threads/proc)
     logname="/tmp/log.log",
-    mem_threshold=0.85,
-    log_dir=None,
 ):
     """
     Calls func(*args) for each args in 'arguments' (iterable of tuples).
@@ -403,16 +409,12 @@ def multiprocess_multiarg(
       - algebra=True  : balanced: N processes, M threads each (numeric heavy)
       - default       : no special thread limiting
 
-    Mem-aware (default): adaptive spawn/kill/requeue via utilz.multiproc.
-      - mem_threshold: used-RAM fraction that triggers shrink (default 0.85)
-      - log_dir: folder for log.jsonl (default under /tmp/utilz_multiproc_logs/)
+    Parallel results retain input order; failed tasks return None with a printed error.
 
     Notes:
       - If both io and algebra are None/False, no thread caps are applied.
       - If num_processes<=0/None, we auto-size from available CPUs (leave 1 for parent).
     """
-    from utilz.multiproc.supervisor import run_adaptive
-
     arguments = list(arguments)
 
     # size the pool
@@ -463,16 +465,38 @@ def multiprocess_multiarg(
         initializer = partial(_limit_threads_for_numeric, per_proc_threads)
         initargs = tuple()
 
-    return run_adaptive(
-        func,
-        arguments,
-        num_processes=num_processes,
-        mem_threshold=mem_threshold,
-        log_dir=log_dir,
-        initializer=initializer,
-        initargs=initargs,
-        progress_bar=progress_bar,
-    )
+    results = [None] * len(arguments)
+    broken = None
+    with ProcessPoolExecutor(
+        max_workers=num_processes,
+        mp_context=mp.get_context("spawn"),
+        initializer=_initialize_process_worker,
+        initargs=(initializer, initargs),
+    ) as pool, tqdm(total=len(arguments), disable=not progress_bar) as bar:
+        futures = {}
+        for index, args in enumerate(arguments):
+            try:
+                futures[pool.submit(func, *args)] = index
+            except BrokenProcessPool as exc:
+                broken = exc
+                break
+        lost = len(arguments) - len(futures)
+        for future in as_completed(futures):
+            index = futures[future]
+            error = future.exception()
+            if isinstance(error, BrokenProcessPool):
+                broken = error
+                lost += 1
+            elif error is not None:
+                message = str(error).replace("\n", " ")
+                print(f"Task {index} failed for {repr(arguments[index])[:200]}: {type(error).__name__}: {message}")
+            else:
+                results[index] = future.result()
+            bar.update(1)
+        bar.update(len(arguments) - len(futures))
+    if broken is not None:
+        print(f"BrokenProcessPool: {lost}/{len(arguments)} tasks lost: {broken}")
+    return results
 
 
 def get_available_device(max_memory=0.8) -> int:

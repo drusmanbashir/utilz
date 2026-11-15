@@ -1,12 +1,11 @@
 # FUNCTIONS.md
 
-Scope: only code under `run/`, `cli/`, or `tools/` belongs here.
+Scope: `run/`
 
 ## CLI
-- `run/case_notes_csv_maker.py`: scan a folder of image filenames, write `notes.csv` with `case_id` and empty `notes`. If the folder has `images/` and `lms/` subfolders, reads case IDs from `images/` and writes `notes.csv` in the parent. If called on `images/` or `lms/` with the sibling present, same: IDs from `images/`, output in their parent.
-- `run/delete_files.py`: delete one or more files from positional args or `--files-json`.
+- `run/case_notes_csv_maker.py`: scan an image folder and write notes.csv with case_id and empty notes; accepts --folder.
+- `run/delete_files.py`: delete files passed as positional arguments or --files-json; print deleted paths as JSON.
 
-## Functions
-- `main` (`run/case_notes_csv_maker.py`): parse `--folder`, call `utilz.case_notes_csv.make_case_notes_csv`, print output path.
-- `make_case_notes_csv` (`utilz/case_notes_csv.py`): extract case IDs from image filenames in a folder and write `notes.csv`.
-- `main` (`run/delete_files.py`): parse args, call `utilz.fileio.delete_files`, and print deleted paths as JSON.
+## Libraries (import, not run)
+- `utilz/helpers.py`: multiprocess_multiarg runs ordered tasks with spawn ProcessPoolExecutor, IO/algebra thread limits, worker oom_score_adj=1000, and None plus printed errors for failed tasks; serial/debug execution stays in the caller.
+- `utilz/case_notes_csv.py`: make_case_notes_csv extracts case IDs from image filenames and writes notes.csv.

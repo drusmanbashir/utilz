@@ -1,3 +1,5 @@
+> Retired: use `ProcessPoolExecutor` through [utilz.helpers.multiprocess_multiarg](../../../utilz/helpers.py).
+
 # Mem-aware multiprocess supervisor — design
 
 Date: 2026-07-10
