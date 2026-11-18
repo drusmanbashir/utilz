@@ -63,6 +63,7 @@ def set_autoreload_ray():
 
 
 def set_autoreload():
+    """Enable IPython autoreload in interactive sessions (skipped on APPLauncher)."""
     if "APPLAUNCHER_0_PATH" in os.environ:
         return
     from IPython import get_ipython
@@ -150,6 +151,7 @@ def slice_list(listi, start_end: list):
 
 
 def chunks(listi, *, n_sized_chunks=None, n_chunks=None):
+    """Split a list into fixed-size chunks or into n_chunks nearly equal parts."""
     assert (n_sized_chunks is None) != (n_chunks is None)
     if len(listi) == 0:
         return []

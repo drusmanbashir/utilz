@@ -19,20 +19,24 @@ import SimpleITK as sitk
 from utilz.helpers import is_close, multiprocess_multiarg
 
 
-def _vec3_delta(a, b):
+def _vec3_delta(a, b):  #AI
     """Return element-wise float differences for two 3-vectors."""
     return [float(x - y) for x, y in zip(a, b)]
 
 
-def _direction_delta(a, b):
+def _direction_delta(a, b):  #AI
     """Return flattened element-wise differences for two 3x3 direction matrices."""
     da = np.array(a, dtype=float).reshape(3, 3)
     db = np.array(b, dtype=float).reshape(3, 3)
     return (da - db).reshape(-1).tolist()
 
 
-def _meta_row(case_id, img, lm, within_tol, aligned):
-    """Build one CSV row with image/LMS metadata and their deltas."""
+def _meta_row(case_id, img, lm, within_tol, aligned):  #AI
+    """Build one CSV row with image/LMS metadata and their deltas.
+
+    Deltas are LMS minus image (spacing, origin, direction). Row includes
+    case_id, within_tol, aligned, per-axis img/lm values, and direction_0..8.
+    """
     img_spacing = img.GetSpacing()
     lm_spacing = lm.GetSpacing()
     img_origin = img.GetOrigin()
@@ -72,7 +76,7 @@ def _meta_row(case_id, img, lm, within_tol, aligned):
     return row
 
 
-def _align_case(img_fn, lm_fn, out_fn, tol):
+def _align_case(img_fn, lm_fn, out_fn, tol):  #AI
     """Copy or rewrite one LMS to match image metadata; return its CSV row."""
     img = sitk.ReadImage(str(img_fn))
     lm = sitk.ReadImage(str(lm_fn))
@@ -107,10 +111,14 @@ def align_images_lms(
     out_subdir="lms_aligned",
     csv_name="lms_metadata_deltas.csv",
     num_processes=16,
-):
+):  #AI
     """Batch-align paired LMS NIfTIs under dataset_root and write delta CSV.
 
-    Returns a summary dict with case counts, output paths, and missing file lists.
+    Pairs files by matching basename in images_subdir and lms_subdir. Writes
+    aligned LMS volumes to out_subdir and a per-case metadata CSV at csv_name.
+
+    Returns summary dict keys: cases, within_tol, aligned, out_dir, csv_fn,
+    missing_images, missing_lms.
     """
     root = Path(dataset_root)
     images_dir = root / images_subdir
@@ -145,7 +153,7 @@ def align_images_lms(
     return summary
 
 
-def main(args):
+def main(args):  #AI
     """Run align_images_lms from parsed CLI args and print summary."""
     summary = align_images_lms(
         args.dataset_root,
@@ -175,10 +183,16 @@ if __name__ == "__main__":
         "dataset_root",
         help="Dataset root containing images/, lms/, writes lms_aligned/ and csv",
     )
-    parser.add_argument("--tol", type=float, default=1e-5)
-    parser.add_argument("--images-subdir", default="images")
-    parser.add_argument("--lms-subdir", default="lms")
-    parser.add_argument("--out-subdir", default="lms_aligned")
-    parser.add_argument("--csv-name", default="lms_metadata_deltas.csv")
-    parser.add_argument("--num-processes", type=int, default=16)
+    parser.add_argument("--tol", type=float, default=1e-5, help="Metadata tolerance.")
+    parser.add_argument("--images-subdir", default="images", help="Image folder name.")
+    parser.add_argument("--lms-subdir", default="lms", help="LMS folder name.")
+    parser.add_argument(
+        "--out-subdir", default="lms_aligned", help="Output folder for aligned LMS."
+    )
+    parser.add_argument(
+        "--csv-name", default="lms_metadata_deltas.csv", help="Output CSV filename."
+    )
+    parser.add_argument(
+        "--num-processes", type=int, default=16, help="Worker count for batch align."
+    )
     main(parser.parse_args())

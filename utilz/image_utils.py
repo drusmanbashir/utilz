@@ -14,6 +14,7 @@ tr = ipdb.set_trace
 
 
 def margin_mm_to_vox(margin_mm, spacing):
+    """Convert a margin in millimetres to voxel counts per axis."""
     spacing = np.asarray(spacing, dtype=float)
     if np.isscalar(margin_mm):
         margin_mm = np.full(len(spacing), float(margin_mm), dtype=float)
@@ -39,6 +40,7 @@ def convert_float16_to_float32(img_fn):  # for torchfloat32
 
 
 def convert_np_to_tensor(img_fn):  # for torchfloat32
+    """Load an .npy file and save the same array as a .pt tensor."""
     img = np.load(img_fn)
     ret_val = [img_fn, img.dtype]
     img = torch.tensor(img)
@@ -60,6 +62,19 @@ def resize_tensor_3d(x: torch.Tensor, output_size, mode=None):
         mode = "nearest" if "int" in str(x.dtype) else "trilinear"
     x = _inner(x, output_size, mode)
     return x
+
+
+def flip_tensor_3d(x: torch.Tensor, dims=(-1,)):  #AI
+    """Flip a 3D tensor along the given dims."""
+    out = torch.flip(x, dims=dims)
+    return out
+
+
+def tensor_minmax(x: torch.Tensor):  #AI
+    """Return (min, max) of a tensor as Python floats."""
+    lo = float(x.min())
+    hi = float(x.max())
+    return lo, hi
 
 
 def resize_multilabel_mask_torch(mask_np, sz_dest_np, label_priority=None):
@@ -93,6 +108,7 @@ def resize_multilabel_mask_sitk(mask_np, sz_dest_np, label_priority):
 
 
 def get_bbox_from_mask(mask, bg_label=0):
+    """Return (z,x,y) slices and sizes of the non-background bbox."""
     mask_voxel_coords = np.where(mask != bg_label)
     minzidx = int(np.min(mask_voxel_coords[0]))
     maxzidx = int(np.max(mask_voxel_coords[0])) + 1
@@ -139,13 +155,14 @@ def crop_to_bbox(arr, bbox, crop_axes, crop_padding=0.0, stride=[1, 1, 1]):
 
 
 def is_standard_orientation(direction: tuple):
+    """True if ITK direction matches identity (LPS standard)."""
     standard =tuple(np.eye(3).flatten())
     direction = tuple(0.0 if aa == -0.0 else float(aa) for aa in direction)
     return standard == direction
 
 
 def get_img_mask_from_nii(case_files_tuple, bg_label=0):
-
+    """Load image+mask NIfTI pair; reorient to LPS if needed."""
     properties = dict()
     data_itk = [sitk.ReadImage(f) for f in case_files_tuple]
     direction = abs_list(data_itk[0].GetDirection())
@@ -175,6 +192,7 @@ def get_img_mask_from_nii(case_files_tuple, bg_label=0):
 
 #
 def retrieve_properties_from_nii(case):
+    """Collect ITK size/spacing/origin/direction for a NIfTI case."""
     properties = dict()
     properties["case_id"] = cleanup_fname(case[0])
     properties["img_file"] = case[0]

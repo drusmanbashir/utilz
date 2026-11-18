@@ -1,4 +1,5 @@
 # %%
+# utilz file I/O helpers (paths, pickles, imaging formats).
 from __future__ import annotations
 
 import collections
@@ -42,17 +43,19 @@ def regex_matcher(indx=0):
 
 @str_to_path()
 def is_sitk_file(fn: Path):
-    """Check for `.nii`/`.nrrd` files."""
+    """Return True if path looks like a SimpleITK image file."""
     return _has_any_extension(fn, (".nii", ".nrrd"))
 
 
 @str_to_path()
 def is_img_file(fn: Path):
-    """Check for image-like files (`.nii`, `.nrrd`, `.pt`)."""
+    """Return True if path looks like an image or tensor file."""
     return _has_any_extension(fn, (".nii", ".nrrd", ".pt"))
 
 
 def _has_any_extension(fn: Path, exts: tuple[str, ...]) -> bool:
+    """Return True if filename contains any of `exts` (dirs → False)."""
+
     if fn.is_dir():
         return False
     fn_name = fn.name.lower()
@@ -73,6 +76,20 @@ def convert_uint16_to_uint8(fname):
     if x.dtype != np.uint8:
         np.save(fname, x.astype(np.uint8))
     return fname, x.dtype
+
+
+def print_file_stub_a(fname):  # AI
+    """Stub: print path."""
+    print(fname)
+
+def jack():
+    """No-op placeholder."""
+    pass
+
+
+def print_file_stub_b(fname):  # AI
+    """Stub: print path with tag."""
+    print("stub_b", fname)
 
 
 def save_file_wrapper(fnc):
@@ -170,6 +187,7 @@ def save_json(dictionary, filename):
 
 
 def delete_files(file_names):
+    """Delete one or many files and return deleted paths."""
     if isinstance(file_names, (str, Path)):
         file_names = [file_names]
     file_names = [Path(file_name) for file_name in file_names]
@@ -227,7 +245,11 @@ def is_filename(x: str):
 
 
 def maybe_makedirs(x: Union[list, tuple, str, Path]):
-    """Create directories when missing."""
+    """Create directories when missing.
+
+    Accepts one path or a list/tuple of paths. Skips bare filenames (no ``/``)
+    and paths that already exist. Prints each path before ``os.makedirs``.
+    """
 
     def _inner(x):
         try:
@@ -254,7 +276,13 @@ def save_pickle(object, filename):
 
 @str_to_path(0)
 def load_dict(filename):
-    """Load dict from JSON or pickle."""
+    """Load dict from JSON or pickle.
+
+    Uses the second dot-separated segment of ``filename.name`` as the format
+    (``json`` or ``pkl``). When the name has no extension, tries
+    ``<name>.json`` then ``<name>.pkl`` in the same directory. Raises
+    ``FileNotFoundError`` when no matching file exists.
+    """
 
     def _inner(filename, ext):
         if ext == "json":
@@ -274,7 +302,12 @@ def load_dict(filename):
 
 
 def save_dict(object, filename, sort=False):
-    """Save dict as JSON, fallback to pickle."""
+    """Save dict as JSON, fallback to pickle.
+
+    Strips any extension from ``filename`` and writes ``<stem>.json``. On JSON
+    serialization failure, removes the partial file and writes ``<stem>.pkl``.
+    When ``sort=True``, keys are sorted via ``OrderedDict`` before save.
+    """
     filename = str(filename).split(".")[0]
     try:
         if sort == True:
@@ -294,9 +327,13 @@ def sitk_filename_to_numpy(fname):
 
 @str_to_path(0)
 def load_image(fn):
+    """Load image by file extension.
 
+    Dispatches on extension: ``.np`` → ``np.load``, ``.pt`` → ``torch.load``,
+    ``.nii`` / ``.nii.gz`` → ``sitk.ReadImage``. Prints and returns None if
+    the extension is not one of those.
+    """
     import torch
-    """Load image from various formats (numpy, torch, nii)."""
     val_extensions = {
         "np": np.load,
         "pt": torch.load,
@@ -319,7 +356,11 @@ def rename_and_move_images_and_masks(
     overwrite=False,
     log=True,
 ):
-    """Rename and move image/mask files into dataset folders."""
+    """Rename and move image/mask files into dataset folders.
+    Writes under ``images/`` (and ``lms/`` when masks given), using ids
+    ``{project_title}_{dataset_subid}{counter:04d}``. Optionally logs
+    old→new ids to ``case_ids.csv`` in the image parent folder.
+    """
 
     def _to_sitk(im, subfolder, output_filename):
         output_filename_full = subfolder / output_filename

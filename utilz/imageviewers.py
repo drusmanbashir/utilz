@@ -1,38 +1,21 @@
-import importlib.util
-import os
 from pathlib import Path
 
 import matplotlib
 import numpy as np
 import SimpleITK as sitk
 import torch
+from IPython import get_ipython
 from matplotlib.widgets import RangeSlider, Slider
 
-def _module_available(name):
-    return importlib.util.find_spec(name) is not None
-
-
-def _gui_display_available():
-    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
-
-
 def _select_matplotlib_backend():
-    if os.environ.get("MPLBACKEND"):
-        return
-    backend = matplotlib.get_backend().lower()
-    if "tk" in backend:
-        return
-    if not _gui_display_available():
-        return
-    if _module_available("tkinter") and _module_available("matplotlib.backends.backend_tkagg"):
-        matplotlib.use("tkagg")
-
-
-_select_matplotlib_backend()
+    shell = get_ipython()
+    if shell is None:
+        matplotlib.use("TkAgg")
+    else:
+        shell.enable_matplotlib(shell.pylab_gui_select or "tk")
+    plt.ion()
 
 import matplotlib.pyplot as plt
-
-plt.ion()
 
 __all__ = [
     "ImageBBoxViewer",
@@ -448,7 +431,8 @@ class _SliceViewerBase:
         self.box_lines_by_ax = {}
 
     def _attach_slice_slider(self, fig, rect, volume_shape):
-        valmax = max(0, volume_shape[self.slice_axis] - 1)
+        n_slices = volume_shape[self.slice_axis]
+        valmax = max(1, n_slices - 1)
         slider = Slider(
             ax=fig.add_axes(rect),
             label="slice",
@@ -457,16 +441,21 @@ class _SliceViewerBase:
             valinit=0,
             valstep=1,
         )
+        slider.set_active(n_slices > 1)
         slider.drawon = False
         slider.eventson = False
         return slider
 
     def _attach_wl_slider(self, fig, rect, wl_range, wl_init):
+        lo, hi = wl_range
+        if lo == hi:
+            padding = max(1.0, abs(lo) * 0.01)
+            lo, hi = lo - padding, hi + padding
         slider = RangeSlider(
             ax=fig.add_axes(rect),
             label="Window level",
-            valmin=wl_range[0],
-            valmax=wl_range[1],
+            valmin=lo,
+            valmax=hi,
             valinit=wl_init,
         )
         slider.drawon = False
@@ -561,6 +550,7 @@ class ImageMaskViewer(_SliceViewerBase):
             orientation, self.coord_order, apply_transpose
         )
         self._init_bbox_state(None, "solid", 1.5)
+        _select_matplotlib_backend()
         self.fig, self.axises = _figure_axes(len(self.npa_list), figure_size)
         self.slider = self._attach_slice_slider(
             self.fig, [0.1, 0.05, 0.8, 0.03], self.npa_list[0].shape
@@ -624,6 +614,7 @@ class ImageBBoxViewer(_SliceViewerBase):
         self.wl_range = (wl_lo, wl_hi)
         self.wl_init = (wl_lo, wl_hi)
 
+        _select_matplotlib_backend()
         self.fig = plt.figure(figsize=figure_size)
         self.ax_img = self.fig.add_axes([0.06, 0.15, 0.62, 0.80])
         self.ax_info = self.fig.add_axes([0.70, 0.15, 0.28, 0.80])
@@ -696,6 +687,7 @@ class ImageMaskBboxViewer(_SliceViewerBase):
         self.wl_range = (wl_lo, wl_hi)
         self.wl_init = (wl_lo, wl_hi)
 
+        _select_matplotlib_backend()
         self.fig = plt.figure(figsize=figure_size)
         self.ax_img = self.fig.add_axes([0.04, 0.15, 0.28, 0.80])
         self.ax_mask = self.fig.add_axes([0.34, 0.15, 0.28, 0.80])
