@@ -84,3 +84,4 @@ utilz = ["py.typed"]
 [tool.setuptools_scm]
 version_scheme = "guess-next-dev"
 local_scheme = "node-and-date"
+fallback_version = "0.1.0"
